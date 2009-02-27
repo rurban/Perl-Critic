@@ -17,7 +17,8 @@ use version;
 
 use base 'Perl::Critic::Policy';
 
-use Perl::Critic::Utils qw{ :severities :classification :ppi :booleans };
+use Perl::Critic::Utils qw{ :severities :classification :ppi :booleans
+                            :language };
 use Perl::Critic::Utils::PPIRegexp qw(get_modifiers get_substitute_string);
 use PPI;
 use PPI::Document;
@@ -36,6 +37,36 @@ Readonly::Scalar my $PERCENT_MINUS => q{%-};
 Readonly::Hash my %NAMED_CAPTURE_BUFFER => (
     $PERCENT_PLUS => 1,
     $PERCENT_MINUS => 1,
+);
+
+# Operators that do not cause a new value to be computed from their operands.
+Readonly::Hash my %UNCLEAN_OPERATOR => (
+    q{||}   => 1,
+    q{//}   => 1,
+    q{&&}   => 1,
+    q{and}  => 1,
+    q{or}   => 1,
+    q{xor}  => 1,
+    q{,}    => 1,
+    q{=>}   => 1,
+);
+
+# Containers that cause a new value to be computed from their operands.
+Readonly::Hash my %CLEAN_CONTAINER => (
+    q{PPI::Structure::Subscript} => 1,
+);
+
+# Tokens that terminate the scan for the end of the argument list in a
+# parentheses-less function call (e.g. "open $foo, '<', $bar or die").
+Readonly::Hash my %ARGUMENT_LIST_END => (
+    'PPI::Token::Structure' => {
+        q{;} => 1,
+    },
+    'PPI::Token::Operator' => {
+        q{and} => 1,
+        q{or} => 1,
+        q{xor} => 1,
+    },
 );
 
 #-----------------------------------------------------------------------------
@@ -129,16 +160,6 @@ sub _handle_substitute {
 # containing the names of variables not rendered harmless by adjacent
 # operators, and the names of the subroutines they were passed to.
 
-Readonly::Hash my %ARGUMENT_LIST_END => (
-    'PPI::Token::Structure' => {
-        q{;} => 1,
-    },
-    'PPI::Token::Operator' => {
-        q{and} => 1,
-        q{or} => 1,
-        q{dor} => 1,
-    },
-);
 
 sub _handle_call {
     my ( $self, $elem, $perl_version ) = @_;
@@ -232,52 +253,88 @@ sub _find_capture_var_5010 {
 
 # This method checks operators adjacent to the given element (assumed to be a
 # PPI::Token::Magic) to see if they cause a new value to be computed. If they
-# do, nothing is returned. If they do not the name of the PPI::Token::Magic
-# symbol is returned. We do not return the object itself, because it may have
-# come from a document synthesized in the course of analysis, and become
-# undefined before we can use it.
+# do, nothing is returned. If they do not $TRUE is returned.
 #
-# We assume any operator other than those in the list below causes value to be
-# computed. If we do not get a new value from one of the adjacent operators we
-# do the same analysis on the parent object, repeating until we come to the
-# specified ultimate container. If at that point we still have not found an
-# operator that causes a new value to be generated, we return the offending
-# symbol name.
-
-Readonly::Hash my %UNCLEAN_OPERATOR => (
-    q{||}   => 1,
-    q{//}   => 1,
-    q{&&}   => 1,
-    q{and}  => 1,
-    q{or}   => 1,
-    q{dor}  => 1,
-    q{,}    => 1,   # Here for convenience.
-    q{=>}   => 1,   # Here for convenience.
-);
-Readonly::Hash my %CLEAN_CONTAINER => (
-    q{PPI::Structure::Subscript} => 1,
-);
+# The arguments after the element bound the search above, to the left, and to
+# the right respectively. If any of these elements is encountered, the check
+# terminates and returns $TRUE. Only the boundary above ($ultimate_container)
+# is required.
+#
+# This method is really just a wrapper for _check_adjacent_operator_left and
+# _check_adjacent_operator_right, which do the heavy lifting.
 
 sub _check_adjacent_operators {
-    my ( $self, $elem, $ultimate_container ) = @_;
+    my ( $self, $elem, $ultimate_container, $stop_left, $stop_right ) = @_;
+
+    return $self->_check_adjacent_operator_left(
+        $elem, $ultimate_container, $stop_left )
+    && $self->_check_adjacent_operator_right(
+        $elem, $ultimate_container, $stop_right );
+
+}
+
+#-----------------------------------------------------------------------------
+
+# This method checks operators to the left of the given element (assumed to be
+# a PPI::Token::Magic) to see if they cause a new value to be computed. If
+# they do, nothing is returned. If they do not $TRUE is returned.
+#
+# The arguments after the element bound the search above and to the left
+# respectively. If any of these elements is encountered, the check terminates
+# and returns $TRUE. Only the boundary above ($ultimate_container) is
+# required.
+#
+# We work by scanning left for the next PPI::Token::Word,
+# PPI::Token::Operator, or (if specified) the $stop element.
+#
+# Finding $stop causes us to return $TRUE.
+#
+# Finding a PPI::Token::Word which is a function
+# call causes to return nothing, since we will be seeing it again.
+#
+# Finding a PPI::Token::Operator causes us to return nothing provided it is
+# not in the $UNCLEAN_OPERATOR hash and its precedence number is higher than
+# any operators scanned thus far; otherwise we continue scanning.
+#
+# If we get to the end of the current container without returning, we repeat
+# the analysis on the parent, returning $TRUE if the parent is
+# $ultimate_container, or returning nothing if the parent's class is in the
+# $CLEAN_CONTAINER hash.
+
+sub _check_adjacent_operator_left {
+    my ( $self, $elem, $ultimate_container, $stop ) = @_;
 
     my $check = $elem;
-    while ( $check != $ultimate_container ) {
+    while ( $check && $check != $ultimate_container ) {
 
         $CLEAN_CONTAINER{ ref $check } and return;
 
-        my $prev_oper = _find_operator(
-            $check, sub { $_[0]->sprevious_sibling() } );
-        my $next_oper = _find_operator(
-            $check, sub { $_[0]->snext_sibling() } );
+        my $precedence;
 
-        foreach my $oper ( $prev_oper, $next_oper ) {
-            $oper or next;
-            $UNCLEAN_OPERATOR{$oper} or return;
+        my $oper = $check;
+        while ( $oper = _find_operator(
+                $oper, sub { $_[0]->sprevious_sibling() }, $stop ) ) {
+
+            ( $stop && $oper == $stop ) and return $TRUE;
+
+            ( $oper->isa( 'PPI::Token::Word' ) &&
+                ( is_method_call( $oper ) || is_function_call( $oper ) ) )
+                and return;     # We will be seeing this one again.
+
+            my $po = precedence_of( $oper );
+            defined $po or next;
+
+            ( defined $precedence && $po < $precedence )
+                and next;
+
+            $UNCLEAN_OPERATOR{ $oper->content() } or return;
+            $precedence = $po;
+
         }
 
-        $check = $check->parent()
-            or last;
+    } continue {
+
+        $check = $check->parent();
 
     }
 
@@ -287,16 +344,82 @@ sub _check_adjacent_operators {
 
 #-----------------------------------------------------------------------------
 
-# This subroutine finds the operator adacent to the given element in the
-# direction indicated by the advance argument (which is a reference to code
-# that finds the next token). The content of the PPI::Token::Operator object
-# is returned. If no operator is found, nothing is returned.
+# This method checks operators to the right of the given element (assumed to
+# be a PPI::Token::Magic) to see if they cause a new value to be computed. If
+# they do, nothing is returned. If they do not $TRUE is returned.
+#
+# The arguments after the element bound the search above and to the right
+# respectively. If any of these elements is encountered, the check terminates
+# and returns $TRUE. Only the boundary above ($ultimate_container) is
+# required.
+#
+# We work by scanning left for the next PPI::Token::Word,
+# PPI::Token::Operator, or (if specified) the $stop element.
+#
+# Finding $stop causes us to return $TRUE.
+#
+# PPI::Token::Word objects are ignored.
+#
+# Finding a PPI::Token::Operator causes us to return nothing provided it is
+# not in the $UNCLEAN_OPERATOR hash and its precedence number is higher than
+# any operators scanned thus far; otherwise we continue scanning.
+#
+# If we get to the end of the current container without returning, we repeat
+# the analysis on the parent, returning $TRUE if the parent is
+# $ultimate_container, or returning nothing if the parent's class is in the
+# $CLEAN_CONTAINER hash.
+
+sub _check_adjacent_operator_right {
+    my ( $self, $elem, $ultimate_container, $stop ) = @_;
+
+    my $check = $elem;
+    while ( $check && $check != $ultimate_container ) {
+
+        $CLEAN_CONTAINER{ ref $check } and return;
+
+        my $precedence;
+
+        my $oper = $check;
+        while ( $oper = _find_operator(
+            $oper, sub { $_[0]->snext_sibling() }, $stop ) ) {
+
+            ( $stop && $oper == $stop ) and return $TRUE;
+
+            $oper->isa( 'PPI::Token::Word' ) and next;
+
+            ( defined $precedence && precedence_of( $oper ) < $precedence )
+                and next;
+
+            $UNCLEAN_OPERATOR{ $oper->content() } or return;
+            $precedence = precedence_of( $oper );
+
+        }
+
+    } continue {
+
+        $check = $check->parent();
+
+    }
+
+    return $TRUE;
+
+}
+
+#-----------------------------------------------------------------------------
+
+# This subroutine scans in the direction specified by the $advance argument
+# (which is a reference to code to find the next or previous token), looking
+# for operators, words, or the $stop token if that was passed. When it finds
+# any of the things it is looking for, it returns the object found. If it does
+# not, it returns nothing.
 
 sub _find_operator {
-    my ( $elem, $advance ) = @_;
+    my ( $elem, $advance, $stop ) = @_;
     my $oper = $elem;
     while ($oper = $advance->($oper)) {
-        $oper->isa( 'PPI::Token::Operator' ) and return $oper->content();
+        ($stop && $oper == $stop) and return $stop;
+        $oper->isa( 'PPI::Token::Operator' ) and return $oper;
+        $oper->isa( 'PPI::Token::Word' ) and return $oper;
     }
     return;
 }
