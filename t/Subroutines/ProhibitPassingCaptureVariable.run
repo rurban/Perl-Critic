@@ -1,0 +1,139 @@
+## name Basic failures
+## failures 7
+## cut
+
+foo($1);
+foo $1 or die;
+foo($1 || 'bar');
+foo(($1 || 'bar'));
+foo(($1) || 'bar');
+s/(foo)/bar($1)/e;
+foo ($0 or $1);
+
+#-----------------------------------------------------------------------------
+
+## name Perl 5.010 failures
+## failures 9
+## cut
+
+use 5.010;
+foo($1);
+foo $1 or die;
+foo($1 || 'bar');
+foo(($1 || 'bar'));
+foo(($1) || 'bar');
+s/(foo)/bar($1)/e;
+foo ($0 or $1);
+foo($+{fu});
+foo($-{fu}[0]);
+
+#-----------------------------------------------------------------------------
+
+## name Basic - things that are not capture variables
+## failures 0
+## cut
+
+foo($0);
+foo $0 or $1;
+
+# No named captures under 5.010, so named capture variables not special.
+
+foo($+{fu});
+foo($-{fu}[0]);
+
+#-----------------------------------------------------------------------------
+
+## name Perl 5.010 - things that are not capture variables
+## failures 0
+## cut
+
+use 5.010;
+foo($0);
+foo $0 or $1;
+
+#-----------------------------------------------------------------------------
+
+## name Basic - safe uses of capture variables
+## failures 0
+## cut
+
+foo($1 + 1);
+foo($2 . ' bar');
+foo(($3 || 'burfle') . 'baz');
+foo(!$4);
+foo("$5");
+foo(<<eod);
+$6
+eod
+foo($bar{$1});
+oct $1;
+s/(foo)/bar$1/;
+s/(foo)/bar($1)/;
+s/(foo)/$1/e;
+s/(foo)/$1 . 'bar'/e;
+
+#-----------------------------------------------------------------------------
+
+## name Perl 5.010 - safe uses of capture variables
+## failures 0
+## cut
+
+foo($1 + 1);
+foo($2 . ' bar');
+foo(($3 || 'burfle') . 'baz');
+foo(!$4);
+foo("$5");
+foo(<<eod);
+$6
+eod
+foo($bar{$1});
+oct $1;
+s/(foo)/bar$1/;
+s/(foo)/bar($1)/;
+s/(foo)/$1/e;
+s/(foo)/$1 . 'bar'/e;
+s/(foo)/bar($1 . 'baz')/e;
+foo($+{bar} + 1);
+foo($-{bar}[0] + 1);
+foo($+{bar} . ' bar');
+foo($-{bar}[0] . ' bar');
+foo(($+{bar} || 'burfle') . 'baz');
+foo(($-{bar}[0] || 'burfle') . 'baz');
+foo(!$+{bar});
+foo(!$-{bar}[0]);
+foo("$+{bar}");
+foo("$-{bar}[0]");
+foo(<<eod);
+$-{bar}
+eod
+foo(<<eod);
+$+{bar}[0]
+eod
+s/(foo)/bar$-{baz}/;
+s/(foo)/bar$+{baz}[0]/;
+s/(foo)/bar($-{baz})/;
+s/(foo)/bar($+{baz}[0])/;
+s/(foo)/$-{baz}/e;
+s/(foo)/$+{baz}[0]/e;
+s/(foo)/$-{baz} . 'bar'/e;
+s/(foo)/$+{baz}[0] . 'bar'/e;
+s/(foo)/bar($-{baz} . 'baz')/e;
+s/(foo)/bar($+{baz}[0] . 'baz')/e;
+
+#-----------------------------------------------------------------------------
+
+##############################################################################
+#      $URL: http://perlcritic.tigris.org/svn/perlcritic/branches/rt38530/distributions/Perl-Critic/t/InputOutput/ProhibitCaptureVarArgs.run $
+#     $Date: 2009-01-17 13:27:26 -0500 (Sat, 17 Jan 2009) $
+#   $Author: clonezone $
+# $Revision: 2988 $
+##############################################################################
+
+# Local Variables:
+#   mode: cperl
+#   cperl-indent-level: 4
+#   fill-column: 78
+#   indent-tabs-mode: nil
+#   c-indentation-style: bsd
+# End:
+# ex: set ts=8 sts=4 sw=4 tw=78 ft=perl expandtab shiftround :

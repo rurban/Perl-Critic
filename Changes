@@ -13,6 +13,7 @@
 
     New Policies:
     * BuiltinFunctions::ProhibitExitInSubroutines
+    * Subroutines::ProhibitPassingCaptureVariable
 
     Policy Changes:
     * ControlStructures::ProhibitNegativeExpressionsInUnlessAndUntilConditions
