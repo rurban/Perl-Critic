@@ -1,8 +1,8 @@
 ##############################################################################
-#      $URL: http://perlcritic.tigris.org/svn/perlcritic/trunk/distributions/Perl-Critic/lib/Perl/Critic/Policy/InputOutput/ProhibitTwoArgOpen.pm $
-#     $Date: 2009-01-01 19:06:43 -0600 (Thu, 01 Jan 2009) $
-#   $Author: clonezone $
-# $Revision: 2949 $
+#      $URL$
+#     $Date$
+#   $Author$
+# $Revision$
 ##############################################################################
 
 package Perl::Critic::Policy::Subroutines::ProhibitPassingCaptureVariable;
@@ -160,41 +160,51 @@ sub _handle_substitute {
 # containing the names of variables not rendered harmless by adjacent
 # operators, and the names of the subroutines they were passed to.
 
-
 sub _handle_call {
     my ( $self, $elem, $perl_version ) = @_;
 
-    (is_method_call( $elem ) || is_function_call( $elem ))
+    # We are only interested in method and function calls which are not Perl
+    # built-ins.
+    ( is_method_call( $elem ) || is_function_call( $elem ) )
         or return;
     is_perl_builtin( $elem ) and return;
 
-    my $next = $elem->snext_sibling()
+    # No argument list, no capture variables.
+    my $first = $elem->snext_sibling()
         or return;
 
-    $next->isa( 'PPI::Structure::List' ) or do {
-        my $doc = PPI::Document->new();
-        my $working_element = $next;
+    # If the next item is a PPI::Structure::List, it contains the argument
+    # list, and we set the scan up with a top bound, but no end bounds,
+    # starting from the first item in the list. Otherwise we start from the
+    # next item itself, and the end bounds are the original element and
+    # whatever we find scanning for the end of the argument list.
+    my ( $ceiling, $stop_left, $stop_scan );
+    if ( $first->isa( 'PPI::Structure::List' ) ) {
+        $ceiling = $first;
+        $first = $first->child(0);
+    } else {
+        $stop_left = $elem;
+        $stop_scan = \&_stop_scan;
+    }
 
-        while ( $working_element ) {
-            my $class = ref $working_element;
-            my $content = $working_element->content();
-            $ARGUMENT_LIST_END{$class}
-                and $ARGUMENT_LIST_END{$class}{$content}
-                and last;
-        } continue {
-            $doc->add_element( $working_element->clone() );
-            $working_element = $working_element->next_sibling();
-        }
+    # Find any capture variables in the argument list. The routine used to
+    # find them depends on our Perl version.
+    my $wanted = (
+        $perl_version &&
+        $MINIMUM_NAMED_CAPTURE_VERSION <= $perl_version
+    ) ? \&_find_capture_var_5010 : \&_find_capture_var_5008;
 
-        $next = $doc;
-    };
+    my @capture_variables = $self->_find_desired_tokens_from( $first,
+        $wanted, $stop_scan );
+    my $stop_right = pop @capture_variables;
 
+    # Check the operators surrounding each capture variable. If they generate
+    # no new value, preserve information on the violation.
     my @violations;
+    foreach my $capture (@capture_variables) {
 
-    foreach my $capture (
-        $self->_find_capture_variables( $next, $perl_version ) ) {
-
-        $self->_check_adjacent_operators( $capture, $next )
+        $self->_check_adjacent_operators( $capture, $ceiling, $stop_left,
+            $stop_right )
             and push @violations, {
                 var => $capture->symbol(),
                 sub => $elem->content(),
@@ -202,25 +212,81 @@ sub _handle_call {
 
     }
 
+    # Return whatever violations we have found.
     return @violations;
 
 }
 
 #-----------------------------------------------------------------------------
 
-# This method finds capture variables in the given element, which must be a
-# PPI::Node. It uses PPI::Node->find() to do the heavy lifting, with the
-# \&wanted routine being determined by the given Perl version.
+# @found = $self->_find_desired_tokens_from( $elem, $wanted, $stop )
+#
+# This method finds the desired tokens starting from the given element.
+# $wanted and $stop are code references. These are called as (e.g.)
+# $wanted->( $self, $thing ) where $self is the same object we were called on,
+# and $thing is the PPI::Element to be examined.
+#
+# $wanted->( $self, $thing ) should return true if $thing is to be returned,
+# false if not, and undef if $thing is a PPI::Node that should not be
+# descended into.
+#
+# $stop->( $self, $thing ) should return true to stop the scan. The $thing
+# _will_ be included in the output as the last item. If $stop is not provided
+# (or is not matched), the scan goes to the end of whatever container $elem is
+# in, and the last item will be undef.
+#
+# The logic is cribbed heavily from PPI::Node->find(), the differences being:
+# - The scan starts on the given element;
+# - The scan ends when $stop->( $self, $thing ) returns true;
+# - Exceptions are not trapped.
 
-sub _find_capture_variables {
-    my ( $self, $elem, $perl_version ) = @_;
+sub _find_desired_tokens_from {
+    my ( $self, $elem, $wanted, $stop ) = @_;
 
-    my $finder = (
-        $perl_version &&
-        $MINIMUM_NAMED_CAPTURE_VERSION <= $perl_version
-    ) ? \&_find_capture_var_5010 : \&_find_capture_var_5008;
+    my @found;
 
-    return @{ $elem->find( $finder ) || [] };
+    my @queue;
+    {
+        my $sib = $elem;
+        while ( $sib ) {
+            push @queue, $sib;
+            $sib = $sib->next_sibling();
+        }
+    }
+    my $thing;
+    while ( $thing = shift @queue ) {
+
+        ( $stop && $stop->( $self, $thing ) )
+            and last;
+
+        my $rv = $wanted->( $self, $thing );
+        $rv and push @found, $thing;
+        defined $rv or next;
+        $thing->isa( 'PPI::Node' ) or next;
+
+        if ( $thing->isa( 'PPI::Structure' ) ) {
+            $thing->finish() and unshift @queue, $thing->finish();
+            unshift @queue, $thing->children();
+            $thing->start() and unshift @queue, $thing->start();
+        } else {
+            unshift @queue, $thing->children();
+        }
+    }
+
+    return (@found, $thing);
+
+}
+
+#-----------------------------------------------------------------------------
+
+# This subroutine recognizes where to stop the scan when we have a subroutine
+# call without parentheses around its arguments.
+
+sub _stop_scan {
+    my ($self, $elem) = @_;
+    my $class = ref $elem;
+    return $ARGUMENT_LIST_END{ $class } &&
+        $ARGUMENT_LIST_END{ $class }{ $elem->content() };
 }
 
 #-----------------------------------------------------------------------------
@@ -251,25 +317,29 @@ sub _find_capture_var_5010 {
 
 #-----------------------------------------------------------------------------
 
+# my $rslt = $self->_check_adjacent_operators( $elem, $ceiling, $stop_left,
+#     $stop_right );
 # This method checks operators adjacent to the given element (assumed to be a
 # PPI::Token::Magic) to see if they cause a new value to be computed. If they
 # do, nothing is returned. If they do not $TRUE is returned.
 #
-# The arguments after the element bound the search above, to the left, and to
-# the right respectively. If any of these elements is encountered, the check
-# terminates and returns $TRUE. Only the boundary above ($ultimate_container)
-# is required.
+# The arguments after the element to search from are the elements that bound
+# the search above ($ceiling), to the left($stop_left), and to the right
+# ($stop_right) respectively. If any of these elements is encountered, the
+# check terminates and returns $TRUE. None of the boundary arguments is
+# required, but for useful searches you will specify either $ceiling, both
+# $stop_left and $stop_right, or all three will be specified.
 #
 # This method is really just a wrapper for _check_adjacent_operator_left and
 # _check_adjacent_operator_right, which do the heavy lifting.
 
 sub _check_adjacent_operators {
-    my ( $self, $elem, $ultimate_container, $stop_left, $stop_right ) = @_;
+    my ( $self, $elem, $ceiling, $stop_left, $stop_right ) = @_;
 
     return $self->_check_adjacent_operator_left(
-        $elem, $ultimate_container, $stop_left )
+        $elem, $ceiling, $stop_left )
     && $self->_check_adjacent_operator_right(
-        $elem, $ultimate_container, $stop_right );
+        $elem, $ceiling, $stop_right );
 
 }
 
@@ -281,7 +351,7 @@ sub _check_adjacent_operators {
 #
 # The arguments after the element bound the search above and to the left
 # respectively. If any of these elements is encountered, the check terminates
-# and returns $TRUE. Only the boundary above ($ultimate_container) is
+# and returns $TRUE. Only the boundary above ($ceiling) is
 # required.
 #
 # We work by scanning left for the next PPI::Token::Word,
@@ -298,14 +368,15 @@ sub _check_adjacent_operators {
 #
 # If we get to the end of the current container without returning, we repeat
 # the analysis on the parent, returning $TRUE if the parent is
-# $ultimate_container, or returning nothing if the parent's class is in the
+# $ceiling, or returning nothing if the parent's class is in the
 # $CLEAN_CONTAINER hash.
 
 sub _check_adjacent_operator_left {
-    my ( $self, $elem, $ultimate_container, $stop ) = @_;
+    my ( $self, $elem, $ceiling, $stop ) = @_;
 
     my $check = $elem;
-    while ( $check && $check != $ultimate_container ) {
+    $ceiling ||= 0;
+    while ( $check && $check != $ceiling ) {
 
         $CLEAN_CONTAINER{ ref $check } and return;
 
@@ -350,7 +421,7 @@ sub _check_adjacent_operator_left {
 #
 # The arguments after the element bound the search above and to the right
 # respectively. If any of these elements is encountered, the check terminates
-# and returns $TRUE. Only the boundary above ($ultimate_container) is
+# and returns $TRUE. Only the boundary above ($ceiling) is
 # required.
 #
 # We work by scanning left for the next PPI::Token::Word,
@@ -366,14 +437,15 @@ sub _check_adjacent_operator_left {
 #
 # If we get to the end of the current container without returning, we repeat
 # the analysis on the parent, returning $TRUE if the parent is
-# $ultimate_container, or returning nothing if the parent's class is in the
+# $ceiling, or returning nothing if the parent's class is in the
 # $CLEAN_CONTAINER hash.
 
 sub _check_adjacent_operator_right {
-    my ( $self, $elem, $ultimate_container, $stop ) = @_;
+    my ( $self, $elem, $ceiling, $stop ) = @_;
 
     my $check = $elem;
-    while ( $check && $check != $ultimate_container ) {
+    $ceiling ||= 0;
+    while ( $check && $check != $ceiling ) {
 
         $CLEAN_CONTAINER{ ref $check } and return;
 
