@@ -1,8 +1,8 @@
 ##############################################################################
-#      $URL: http://perlcritic.tigris.org/svn/perlcritic/branches/Perl-Critic-With-Param-Validation/lib/Perl/Critic/PolicyListing.pm $
-#     $Date: 2006-12-13 21:35:21 -0800 (Wed, 13 Dec 2006) $
-#   $Author: thaljef $
-# $Revision: 1089 $
+#      $URL$
+#     $Date$
+#   $Author$
+# $Revision$
 ##############################################################################
 
 package Perl::Critic::ProfilePrototype;
@@ -18,7 +18,7 @@ use Perl::Critic::Policy qw{};
 use Perl::Critic::Utils qw{ :characters };
 use overload ( q{""} => 'to_string' );
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -99,6 +99,11 @@ sub to_string {
     $prototype .= "\n";
 
     $prototype .= $prefix;
+    $prototype .= q{allow-unsafe = };
+    $prototype .= $configuration->unsafe_allowed();
+    $prototype .= "\n";
+
+    $prototype .= $prefix;
     $prototype .= q{profile-strictness = };
     $prototype .= $configuration->profile_strictness();
     $prototype .= "\n";
@@ -157,9 +162,13 @@ sub to_string {
         $prototype .= "\n";
     }
 
+    $prototype .= $prefix;
+    $prototype .= q{program-extensions = };
+    $prototype .= join $SPACE, $configuration->program_extensions();
+
     Perl::Critic::Policy::set_format( $self->_proto_format() );
 
-    return $prototype . "\n" . join q{}, map { "$_" } @{ $self->_get_policies() };
+    return $prototype . "\n\n" . join q{}, map { "$_" } @{ $self->_get_policies() };
 }
 
 #-----------------------------------------------------------------------------
@@ -216,6 +225,12 @@ L<Perl::Critic|Perl::Critic> profile (e.g. a F<.perlcriticrc> file.
 There are no user-serviceable parts here.
 
 
+=head1 INTERFACE SUPPORT
+
+This is considered to be a non-public class.  Its interface is subject
+to change without notice.
+
+
 =head1 CONSTRUCTOR
 
 =over
@@ -256,12 +271,12 @@ file.
 
 =head1 AUTHOR
 
-Jeffrey Ryan Thalhammer <thaljef@cpan.org>
+Jeffrey Ryan Thalhammer <jeff@imaginative-software.com>
 
 
 =head1 COPYRIGHT
 
-Copyright (c) 2005-2009 Jeffrey Ryan Thalhammer.  All rights reserved.
+Copyright (c) 2005-2010 Imaginative Software Systems.  All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

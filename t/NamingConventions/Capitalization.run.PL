@@ -17,7 +17,7 @@ use Carp qw< confess >;
 use Carp qw< confess >;
 use Fatal qw< open close >;
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 
 
@@ -144,6 +144,10 @@ $Foo = 42;
 ## cut
 
 Readonly::Scalar my $CONSTANT = 23;
+use constant FOO => 42;
+use constant { BAR => 3, BAZ => 7 };
+use constant 1.16 FOO => 42;
+use constant 1.16 { BAR => 3, BAZ => 7 };
 
 #-----------------------------------------------------------------------------
 
@@ -405,6 +409,16 @@ sub $subroutine_name {
 sub bLaHlAhLaH {
     # Blah blah blah
 }
+
+#-----------------------------------------------------------------------------
+
+## name Subroutine named "Foo::Bar::$subroutine_name" vs the "$capitalization_scheme" capitalization scheme.
+## parms { subroutines => '$capitalization_scheme' }
+## failures $failures
+## cut
+
+sub Foo::Bar::$subroutine_name;
+
 END_SUBROUTINE_TEST
 
     return;
@@ -574,7 +588,6 @@ foreach my \$$variable_name (\@_) {
 
 ## name State variable as foreach loop variable named "$variable_name" vs the "$capitalization_scheme" capitalization scheme.
 ## failures $failures
-## TODO PPI that supports state variables isn't released yet.
 ## parms { local_lexical_variables => '$capitalization_scheme' }
 ## cut
 
@@ -606,40 +619,20 @@ foreach our \$$variable_name (\@_) {
 
 #-----------------------------------------------------------------------------
 
-## name Localized variable as foreach loop variable named "$variable_name" vs the "$capitalization_scheme" capitalization scheme.
-## failures $failures
-## parms { global_variables => '$capitalization_scheme' }
+## name Localized builtin variable
+## failures 0
 ## cut
 
-foreach local \$$variable_name (\@_) {
-    say \$$variable_name;
-}
+local \$\@;
 
 #-----------------------------------------------------------------------------
 
-## name Localized builtin variable as foreach loop variable vs the "$capitalization_scheme" capitalization scheme.
+## name Localized \$\\
 ## failures 0
-## parms { global_variables => '$capitalization_scheme' }
 ## cut
 
-foreach local \$@ (\@_) {
-    say \$@;
-}
-
-foreach local \$EVAL_ERROR (\@_) {
-    say \$EVAL_ERROR;
-}
-
-#-----------------------------------------------------------------------------
-
-## name Localized variable in another package as foreach loop variable vs the "$capitalization_scheme" capitalization scheme.
-## failures 0
-## parms { global_variables => '$capitalization_scheme' }
-## cut
-
-foreach local \$Foo::Bar (\@_) {
-    say \$Foo::Bar;
-}
+# \$\\ was missing from the built in global exceptions
+local \$\\;
 END_FOREACH_LOOP_VARIABLE_TESTS
 
     return;
@@ -666,7 +659,6 @@ for (my \$$variable_name = -7; \$$variable_name <= 17; \$$variable_name += 3) {
 
 ## name State variable as C-style for loop variable named "$variable_name" vs the "$capitalization_scheme" capitalization scheme.
 ## failures $failures
-## TODO PPI that supports state variables isn't released yet.
 ## parms { local_lexical_variables => '$capitalization_scheme' }
 ## cut
 

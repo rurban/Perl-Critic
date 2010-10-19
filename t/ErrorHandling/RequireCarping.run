@@ -356,6 +356,58 @@ die "A horrible death\n" ;
 
 #-----------------------------------------------------------------------------
 
+## name Complain if in main:: and option not set (RT #56619)
+## failures 1
+## cut
+
+package main;
+
+die "A horrible death";
+
+#-----------------------------------------------------------------------------
+
+## name Don't complain if in main:: and option set (RT #56619)
+## failures 0
+## parms { allow_in_main_unless_in_subroutine => 1 }
+## cut
+
+package main;
+
+die "A horrible death";
+
+#-----------------------------------------------------------------------------
+
+## name Don't complain if implicitly in main:: and option set (RT #56619)
+## failures 0
+## parms { allow_in_main_unless_in_subroutine => 1 }
+## cut
+
+die "A horrible death";
+
+#-----------------------------------------------------------------------------
+
+## name Complain if in main:: but in subroutine (RT #56619)
+## parms { allow_in_main_unless_in_subroutine => 1 }
+## failures 1
+## cut
+
+sub foo {
+    die "Goodbye, cruel world!";
+}
+
+#-----------------------------------------------------------------------------
+
+## name Complain if in main:: but in anonymous subroutine (RT #56619)
+## parms { allow_in_main_unless_in_subroutine => 1 }
+## failures 1
+## cut
+
+my $foo = sub {
+    die "Goodbye, cruel world!";
+};
+
+#-----------------------------------------------------------------------------
+
 ##############################################################################
 #      $URL$
 #     $Date$

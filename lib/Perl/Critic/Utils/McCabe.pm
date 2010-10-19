@@ -19,7 +19,7 @@ use base 'Exporter';
 
 #-----------------------------------------------------------------------------
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -156,8 +156,14 @@ Provides approximations of McCabe scores.  The McCabe score of a set
 of code describes the number of possible paths through it.  The
 functions here approximate the McCabe score by summing the number of
 conditional statements and operators within a set of code.  See
-L<http://www.sei.cmu.edu/str/descriptions/cyclomatic_body.html> for
+L<http://en.wikipedia.org/wiki/Cyclomatic_complexity> for
 some discussion about the McCabe number and other complexity metrics.
+
+
+=head1 INTERFACE SUPPORT
+
+This is considered to be a public module.  Any changes to its
+interface will go through a deprecation cycle.
 
 
 =head1 IMPORTABLE SUBS
@@ -181,12 +187,12 @@ contained in a subroutine.
 
 =head1 AUTHOR
 
-Jeffrey Ryan Thalhammer <thaljef@cpan.org>
+Jeffrey Ryan Thalhammer <jeff@imaginative-software.com>
 
 
 =head1 COPYRIGHT
 
-Copyright (c) 2005-2009 Jeffrey Ryan Thalhammer.  All rights reserved.
+Copyright (c) 2005-2010 Imaginative Software Systems.  All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

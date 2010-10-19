@@ -1,8 +1,8 @@
 ##############################################################################
-#      $URL: http://perlcritic.tigris.org/svn/perlcritic/trunk/Perl-Critic/lib/Perl/Critic/Policy/Miscellanea/ProhibitFormats.pm $
-#     $Date: 2008-09-07 03:33:32 -0700 (Sun, 07 Sep 2008) $
-#   $Author: clonezone $
-# $Revision: 2730 $
+#      $URL$
+#     $Date$
+#   $Author$
+# $Revision$
 ##############################################################################
 
 package Perl::Critic::Policy::Miscellanea::ProhibitUselessNoCritic;
@@ -18,7 +18,7 @@ use List::MoreUtils qw< none >;
 use Perl::Critic::Utils qw{ :severities :classification hashify };
 use base 'Perl::Critic::Policy';
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -85,7 +85,7 @@ This Policy is part of the core L<Perl::Critic|Perl::Critic> distribution.
 =head1 DESCRIPTION
 
 Sometimes, you may need to use a C<"## no critic"> annotation to work around
-a false-positive bug in L<Perl::Critic>.  But eventually, that bug might get
+a false-positive bug in L<Perl::Critic|Perl::Critic>.  But eventually, that bug might get
 fixed, leaving your code with extra C<"## no critic"> annotations lying about.
 Or you may use them to locally disable a Policy, but then later decide to
 permanently remove that Policy entirely from your profile, making some of
@@ -143,12 +143,12 @@ L<http://use.perl.org/article.pl?sid=08/09/24/1957256>.
 
 =head1 AUTHOR
 
-Jeffrey Ryan Thalhammer <thaljef@cpan.org>
+Jeffrey Ryan Thalhammer <jeff@imaginative-software.com>
 
 
 =head1 COPYRIGHT
 
-Copyright (c) 2005-2009 Jeffrey Ryan Thalhammer.  All rights reserved.
+Copyright (c) 2005-2010 Imaginative Software Systems.  All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

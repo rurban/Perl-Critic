@@ -18,7 +18,7 @@ use PPI::Document;
 use Perl::Critic::Utils qw{ :booleans :severities :classification :ppi $SCOLON };
 use base 'Perl::Critic::Policy';
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -73,6 +73,7 @@ sub _string_eval_is_an_include {
 
     return if @statements > 2;
     my $include = $statements[0];
+    return if not defined $include; # RT 60179
     return if not $include->isa('PPI::Statement::Include');
     return if $include->type() eq 'no';
 
@@ -167,12 +168,12 @@ L<Perl::Critic::Policy::ControlStrucutres::RequireBlockMap|Perl::Critic::Policy:
 
 =head1 AUTHOR
 
-Jeffrey Ryan Thalhammer <thaljef@cpan.org>
+Jeffrey Ryan Thalhammer <jeff@imaginative-software.com>
 
 
 =head1 COPYRIGHT
 
-Copyright (c) 2005-2009 Jeffrey Ryan Thalhammer.  All rights reserved.
+Copyright (c) 2005-2010 Imaginative Software Systems.  All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

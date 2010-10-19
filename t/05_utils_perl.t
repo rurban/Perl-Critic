@@ -13,17 +13,15 @@ use warnings;
 
 use Readonly;
 
-use Test::More tests => 8;
+
+use Perl::Critic::Utils::Perl qw< :all >;
+
+
+use Test::More tests => 7;
 
 #-----------------------------------------------------------------------------
 
-our $VERSION = '1.096';
-
-#-----------------------------------------------------------------------------
-
-BEGIN {
-    use_ok('Perl::Critic::Utils::Perl', qw{ :all } );
-}
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 #  export tests
@@ -46,7 +44,7 @@ can_ok('main', 'symbol_without_sigil');
 
 #-----------------------------------------------------------------------------
 
-# ensure we run true if this test is loaded by
+# ensure we return true if this test is loaded by
 # t/05_utils_ppi.t_without_optional_dependencies.t
 1;
 

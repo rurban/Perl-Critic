@@ -18,16 +18,21 @@ use List::MoreUtils qw< any >;
 
 use Perl::Critic::Exception::AggregateConfiguration;
 use Perl::Critic::Exception::Configuration::Option::Policy::ParameterValue;
-use Perl::Critic::Utils qw< :booleans :characters :severities is_perl_global >;
+use Perl::Critic::Utils qw<
+    :booleans :characters :severities
+    hashify is_perl_global
+>;
 use Perl::Critic::Utils::Perl qw< symbol_without_sigil >;
 use Perl::Critic::Utils::PPI qw<
     is_in_subroutine
-    get_constant_name_element_from_declaring_statement
+>;
+use PPIx::Utilities::Statement qw<
+    get_constant_name_elements_from_declaring_statement
 >;
 
 use base 'Perl::Critic::Policy';
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -36,8 +41,8 @@ Readonly::Scalar my $ALL_ONE_CASE_REGEX      =>
     qr< \A [@%\$]? (?: [[:lower:]_\d]+ | [[:upper:]_\d]+ ) \z >xms;
 Readonly::Scalar my $ALL_LOWER_REGEX         => qr< \A [[:lower:]_\d]+ \z >xms;
 Readonly::Scalar my $ALL_UPPER_REGEX         => qr< \A [[:upper:]_\d]+ \z >xms;
-Readonly::Scalar my $STARTS_WITH_LOWER_REGEX => qr< \A _* [[:lower:]]     >xms;
-Readonly::Scalar my $STARTS_WITH_UPPER_REGEX => qr< \A _* [[:upper:]]     >xms;
+Readonly::Scalar my $STARTS_WITH_LOWER_REGEX => qr< \A _* [[:lower:]\d]   >xms;
+Readonly::Scalar my $STARTS_WITH_UPPER_REGEX => qr< \A _* [[:upper:]\d]   >xms;
 Readonly::Scalar my $NO_RESTRICTION_REGEX    => qr< .                     >xms;
 
 Readonly::Hash my %CAPITALIZATION_SCHEME_TAGS    => (
@@ -79,6 +84,8 @@ Readonly::Hash my %NAME_FOR_TYPE => (
     constant                => 'Constant',
     label                   => 'Label',
 );
+
+Readonly::Hash my %IS_COMMA => hashify( $COMMA, $FATCOMMA );
 
 Readonly::Scalar my $EXPL                   => [ 45, 46 ];
 
@@ -348,9 +355,10 @@ sub violates {
     }
 
     if (
-        my $name = get_constant_name_element_from_declaring_statement($elem)
+        my @names = get_constant_name_elements_from_declaring_statement($elem)
     ) {
-        return $self->_constant_capitalization($elem, $name);
+        return ( grep { $_ }
+            map { $self->_constant_capitalization( $elem, $_ ) } @names )
     }
 
     if ( $elem->isa('PPI::Statement::Package') ) {
@@ -376,9 +384,7 @@ sub _variable_capitalization {
     my @violations;
 
     NAME:
-    for my $name (
-        map { $_->symbol() } _ppi_statement_variable_symbols($elem)
-    ) {
+    for my $name ( map { $_->symbol() } $elem->symbols() ) {
         if ($elem->type() eq 'local') {
             # Fully qualified names are exempt because we can't be responsible
             # for other people's sybols.
@@ -452,6 +458,7 @@ sub _subroutine_capitalization {
     return if $elem->isa('PPI::Statement::Scheduled');
 
     my $name = $elem->name();
+    $name =~ s{ .* :: }{}smx;  # Allow for "sub Some::Package::foo {}"
 
     return $self->_check_capitalization($name, $name, 'subroutine', $elem);
 }
@@ -590,73 +597,6 @@ sub _is_directly_in_scope_block {
     return $prior_to_grand_parent->content() ne 'continue';
 }
 
-
-# This code taken from unreleased PPI.  Delete this once next version of PPI
-# is released.  "$self" is not this Policy, but a PPI::Statement::Variable.
-sub _ppi_statement_variable_symbols {
-    my $self = shift;
-
-    # Get the children we care about
-    my @schild = grep { $_->significant } $self->children;
-    if ($schild[0]->isa('PPI::Token::Label')) { shift @schild; }
-
-    # If the second child is a symbol, return its name
-    if ( $schild[1]->isa('PPI::Token::Symbol') ) {
-        return $schild[1];
-    }
-
-    # If it's a list, return as a list
-    if ( $schild[1]->isa('PPI::Structure::List') ) {
-        my $expression = $schild[1]->schild(0);
-        $expression and
-        $expression->isa('PPI::Statement::Expression') or return ();
-
-        # my and our are simpler than local
-        if (
-                $self->type eq 'my'
-            or  $self->type eq 'our'
-            or  $self->type eq 'state'
-        ) {
-            return
-                grep { $_->isa('PPI::Token::Symbol') }
-                $expression->schildren;
-        }
-
-        # Local is much more icky (potentially).
-        # Not that we are actually going to deal with it now,
-        # but having this seperate is likely going to be needed
-        # for future bug reports about local() things.
-
-        # This is a slightly better way to check.
-        return
-            grep { $self->_local_variable($_)    }
-            grep { $_->isa('PPI::Token::Symbol') }
-            $expression->schildren;
-    }
-
-    # erm... this is unexpected
-    return ();
-}
-
-sub _local_variable {
-    my ($self, $elem) = @_;
-
-    # The last symbol should be a variable
-    my $n = $elem->snext_sibling or return 1;
-    my $p = $elem->sprevious_sibling;
-    if ( !$p || $p eq $COMMA ) {
-        # In the middle of a list
-        return 1 if $n eq $COMMA;
-
-        # The first half of an assignment
-        return 1 if $n eq $EQUAL;
-    }
-
-    # Lets say no for know... additional work
-    # should go here.
-    return $EMPTY;
-}
-
 sub _is_not_real_label {
     my $elem = shift;
 
@@ -685,7 +625,7 @@ __END__
 
 =pod
 
-=for stopwords pbp perlstyle Schwern
+=for stopwords pbp perlstyle Schwern THINGY
 
 =head1 NAME
 
@@ -727,7 +667,8 @@ Constants are in all-caps.
 
     Readonly::Scalar my $foo = 42;  # not ok
 
-There are other opinions on the specifics, for example, in L<perlstyle>.  This
+There are other opinions on the specifics, for example, in
+L<perlstyle|perlstyle>.  This
 policy can be configured to match almost any style that you can think of.
 
 
@@ -794,7 +735,8 @@ defaults to
 C<\$VERSION @ISA @EXPORT(?:_OK)? %EXPORT_TAGS \$AUTOLOAD %ENV %SIG \$TODO>.
 C<subroutine_exemptions> defaults to
 C<AUTOLOAD BUILD BUILDARGS CLEAR CLOSE DELETE DEMOLISH DESTROY EXISTS EXTEND FETCH FETCHSIZE FIRSTKEY GETC NEXTKEY POP PRINT PRINTF PUSH READ READLINE SCALAR SHIFT SPLICE STORE STORESIZE TIEARRAY TIEHANDLE TIEHASH TIESCALAR UNSHIFT UNTIE WRITE>
-which should cover all the standard Perl subroutines plus those from L<Moose>.
+which should cover all the standard Perl subroutines plus those from
+L<Moose|Moose>.
 
 For example, if you want all local variables to be in all lower-case
 and global variables to start with "G_" and otherwise not contain
@@ -812,7 +754,7 @@ underscores, but exempt any variable with a name that contains
 Handle C<use vars>.  Treat constant subroutines like constant
 variables.  Handle bareword file handles.  There needs to be "schemes"
 or ways of specifying "perlstyle" or "pbp".  Differentiate lexical
-L<Readonly> constants in scopes.
+L<Readonly|Readonly> constants in scopes.
 
 
 =head1 BUGS
@@ -826,12 +768,12 @@ This policy won't catch problems with the declaration of C<$y> below:
 
 =head1 AUTHOR
 
-Michael G Schwern <schwern@pobox.com>
+Multiple people
 
 
 =head1 COPYRIGHT
 
-Copyright (c) 2008-2009 Michael G Schwern.  All rights reserved.
+Copyright (c) 2008-2010 Michael G Schwern.  All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

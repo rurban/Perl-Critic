@@ -17,7 +17,7 @@ use Perl::Critic::Utils qw{ :booleans :characters :severities :classification
 
 use base 'Perl::Critic::Policy';
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -25,14 +25,14 @@ Readonly::Scalar my $DESC => q{Return value of flagged function ignored};
 Readonly::Scalar my $EXPL => [208, 278];
 
 Readonly::Array my @DEFAULT_FUNCTIONS => qw(
-    open close print
+    open close print say
 );
 # I created this list by searching for "return" in perlfunc
 Readonly::Array my @BUILTIN_FUNCTIONS => qw(
     accept bind binmode chdir chmod chown close closedir connect
     dbmclose dbmopen exec fcntl flock fork ioctl kill link listen
     mkdir msgctl msgget msgrcv msgsnd open opendir pipe print read
-    readdir readline readlink readpipe recv rename rmdir seek seekdir
+    readdir readline readlink readpipe recv rename rmdir say seek seekdir
     semctl semget semop send setpgrp setpriority setsockopt shmctl
     shmget shmread shutdown sleep socket socketpair symlink syscall
     sysopen sysread sysseek system syswrite tell telldir truncate
@@ -141,7 +141,7 @@ except that this is configurable to apply to any function, whether
 core or user-defined.
 
 If your module uses L<Fatal|Fatal>,
-C<Fatal::Exception|Fatal::Exception>, or L<autodie> then any functions
+L<Fatal::Exception|Fatal::Exception>, or L<autodie|autodie> then any functions
 wrapped by those modules will not trigger this policy.  For example:
 
     use Fatal qw(open);
@@ -158,7 +158,7 @@ lexical effects aren't taken into account.
 =head1 CONFIGURATION
 
 This policy watches for a configurable list of function names.  By
-default, it applies to C<open>, C<print> and C<close>.  You can
+default, it applies to C<open>, C<print>, C<say> and C<close>.  You can
 override this to set it to a different list of functions with the
 C<functions> and C<exclude_functions> settings.  To do this, put
 entries in a F<.perlcriticrc> file like this:
@@ -212,7 +212,7 @@ Chris Dolan <cdolan@cpan.org>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2007-2009 Chris Dolan.  Many rights reserved.
+Copyright (c) 2007-2010 Chris Dolan.  Many rights reserved.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

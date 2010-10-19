@@ -24,7 +24,7 @@ use Perl::Critic::Exception::Configuration::Option::Global::ParameterValue
 
 #-----------------------------------------------------------------------------
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -152,6 +152,12 @@ This is a helper class for evaluating theme expressions into sets of
 Policy objects.  There are no user-serviceable parts here.
 
 
+=head1 INTERFACE SUPPORT
+
+This is considered to be a non-public class.  Its interface is subject
+to change without notice.
+
+
 =head1 METHODS
 
 =over
@@ -229,12 +235,12 @@ matched expression that is not valid in a rule.
 
 =head1 AUTHOR
 
-Jeffrey Thalhammer  <thaljef@cpan.org>
+Jeffrey Ryan Thalhammer  <jeff@imaginative-software.com>
 
 
 =head1 COPYRIGHT
 
-Copyright (c) 2006-2009 Jeffrey Thalhammer
+Copyright (c) 2006-2010 Imaginative Software Systems
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

@@ -17,7 +17,7 @@ use Test::More tests => 1;
 
 #-----------------------------------------------------------------------------
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -30,7 +30,7 @@ require_ok($perlcritic);
 
 #-----------------------------------------------------------------------------
 
-# ensure we run true if this test is loaded by
+# ensure we return true if this test is loaded by
 # t/07_perlcritic.t_without_optional_dependencies.t
 1;
 

@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 
-use Perl::Critic qw(critique);
+use Perl::Critic;
 use Benchmark ':hireswallclock';
 
 #---------------------------------------------------------------
@@ -12,11 +12,17 @@ our $VERSION = '0.01';
 
 #---------------------------------------------------------------
 
-my $iters = 100;
-my $pc_opts = {-profile => '', -theme => 'core', -severity => 1};
+
+my @exclude = qw(TidyCode PodSpelling);  # We can't really optimize these
+my %pc_opts = (-profile => '', -theme => 'core', -severity => 1, -exclude => \@exclude);
+my $pc = Perl::Critic->new( %pc_opts );
+
 my $test_file = shift @ARGV || die "Must specify a test file.\n";
-my $code_ref = sub {critique( $pc_opts, $test_file )};
-timethis( $iters, $code_ref, 'critique()' );
+my $iters = shift @ARGV || 10;
+
+my $code_ref = sub { $pc->critique($test_file) for 1 .. $iters };
+my $t = timeit( 1, $code_ref, "Critqiue of $test_file");
+print "$iters iterations took: ",timestr($t),"\n";
 exit;
 
 #---------------------------------------------------------------
@@ -39,7 +45,7 @@ pc-benchmark - Measure performance of Perl::Critic
 
 =head1 DESCRIPTION
 
-This is a simple script that uses the L<Benchmark> module to measure
+This is a simple program that uses the L<Benchmark> module to measure
 the general speed of L<Perl::Critic>.  For the specified F<FILE>, the
 C<Perl::Critic::critique()> function is called 100 times, with all the
 'core' Policies enabled with their default configuration.  The total
@@ -59,17 +65,17 @@ for both runs.
 =head1 CAVEATS
 
 This is the first time I've used L<Benchmark>, so I don't know if this
-script is "correct" or even useful.  It just seemed like an interesting
+program is "correct" or even useful.  It just seemed like an interesting
 thing to do.
 
 
 =head1 AUTHOR
 
-Jeffrey R. Thalhammer <thaljef@cpan.org>
+Jeffrey Ryan Thalhammer <jeff@imaginative-software.com>
 
 
 =head1 COPYRIGHT
 
-Copyright (c) 2009.
+Copyright (c) 2009-2010 Imaginative Software Systems.  All rights reserved.
 
 =cut

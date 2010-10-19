@@ -21,7 +21,7 @@ use Carp;
 use Perl::Critic::Utils qw{ :booleans :severities split_nodes_on_comma };
 use base 'Perl::Critic::Policy';
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -60,8 +60,9 @@ sub violates {
 
     my $num_args;
     if ($elem->prototype) {
-       # subtract two for the "()" on the prototype
-       $num_args = -2 + length $elem->prototype;  ## no critic (ProhibitMagicNumbers)
+        my $prototype = $elem->prototype();
+        $prototype =~ s/ \\ [[] .*? []] /*/smxg;    # Allow for grouping
+        $num_args = $prototype =~ tr/$@%&*_/$@%&*_/;    # RT 56627
     } else {
        $num_args = _count_args($elem->block->schildren);
     }
@@ -184,7 +185,7 @@ Chris Dolan <cdolan@cpan.org>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2007-2009 Chris Dolan.  Many rights reserved.
+Copyright (c) 2007-2010 Chris Dolan.  Many rights reserved.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

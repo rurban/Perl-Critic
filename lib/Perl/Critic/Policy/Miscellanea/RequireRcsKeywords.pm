@@ -20,7 +20,7 @@ use Perl::Critic::Utils qw{
 
 use base 'Perl::Critic::Policy';
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -76,7 +76,7 @@ sub violates {
     my ( $self, $elem, $doc ) = @_;
     my @viols = ();
 
-    my $nodes = $doc->find( \&_wanted );
+    my $nodes = $self->_find_wanted_nodes($doc);
     for my $keywordset_ref ( @{ $self->{_keyword_sets} } ) {
         if ( not $nodes ) {
             my $desc = 'RCS keywords '
@@ -112,15 +112,15 @@ sub violates {
     return @viols;
 }
 
-sub _wanted {
-    my ( undef, $elem ) = @_;
+#-----------------------------------------------------------------------------
 
-    return
-            $elem->isa('PPI::Token::Pod')
-        ||  $elem->isa('PPI::Token::Comment')
-        ||  $elem->isa('PPI::Token::Quote::Single')
-        ||  $elem->isa('PPI::Token::Quote::Literal')
-        ||  $elem->isa('PPI::Token::End');
+sub _find_wanted_nodes {
+    my ( $self, $doc ) = @_;
+    my @wanted_types = qw(Pod Comment Quote::Single Quote::Literal End);
+    my @found =  map { @{ $doc->find("PPI::Token::$_") || [] } } @wanted_types;
+    push @found, grep { $_->content() =~ m/ \A qw\$ [^\$]* \$ \z /smx } @{
+        $doc->find('PPI::Token::QuoteLike::Words') || [] };
+    return @found ? \@found : $EMPTY;  # Behave like PPI::Node::find()
 }
 
 1;
@@ -179,12 +179,12 @@ supported by CVS and Subversion are probably the same.
 
 =head1 AUTHOR
 
-Jeffrey Ryan Thalhammer <thaljef@cpan.org>
+Jeffrey Ryan Thalhammer <jeff@imaginative-software.com>
 
 
 =head1 COPYRIGHT
 
-Copyright (c) 2005-2009 Jeffrey Ryan Thalhammer.  All rights reserved.
+Copyright (c) 2005-2010 Imaginative Software Systems.  All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

@@ -1,5 +1,6 @@
 accessor
 accessors
+ActiveState
 autoflushes
 AUTOLOAD
 backticks
@@ -26,6 +27,7 @@ exponentials
 filehandle
 filehandles
 filename
+filenames
 globals
 globbing
 Guzis
@@ -41,35 +43,44 @@ memoization
 metacharacters
 Metadata
 metadata
+misterwhipple
 multi-line
 mutators
 namespace
 namespaces
 octothorp
 PBP
+pbp
 perl
 perlcritic
 perlcriticrc
 perldoc
 Perlish
+perlmonk
 perls
+PDK
 PolicyListing
 POSIX
 postfix
 PPI
+PPI's
 pragma
 pragmas
 pragmata
 prepend
 prepending
 programmatically
+ProhibitPunctuationVars
+quotish
 readline
 Readonly
 refactor
 refactoring
 regex
+regexes
 runtime
 Schwartzian
+severities
 sigil
 sigils
 SQL
@@ -78,7 +89,9 @@ STDIN
 STDOUT
 stringification
 subdirectories
+subscripted
 superclass
+superclasses
 TerMarsch
 Thalhammer
 TODO
@@ -90,6 +103,7 @@ unescaped
 unparsed
 vice-versa
 whitespace
+Wyant
 
 #      $URL$
 #     $Date$

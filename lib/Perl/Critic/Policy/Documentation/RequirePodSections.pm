@@ -15,7 +15,7 @@ use Readonly;
 use Perl::Critic::Utils qw{ :booleans :characters :severities :classification };
 use base 'Perl::Critic::Policy';
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -317,15 +317,20 @@ sub violates {
     my %found_sections = ();
     my @violations = ();
 
-    my @required_sections = is_script($doc) ? @{ $self->{_script_sections} }
-                                            : @{ $self->{_lib_sections} };
+    my @required_sections =
+        $doc->is_program()
+            ? @{ $self->{_script_sections} }
+            : @{ $self->{_lib_sections} };
 
     my $pods_ref = $doc->find('PPI::Token::Pod');
     return if not $pods_ref;
 
     # Round up the names of all the =head1 sections
+    my $pod_of_record;
     for my $pod ( @{ $pods_ref } ) {
         for my $found ( $pod =~ m{ ^ =head1 \s+ ( .+? ) \s* $ }gxms ) {
+            # Use first matching POD as POD of record (RT #59268)
+            $pod_of_record ||= $pod;
             #Leading/trailing whitespace is already removed
             $found_sections{ uc $found } = 1;
         }
@@ -335,7 +340,9 @@ sub violates {
     for my $required ( @required_sections ) {
         if ( not exists $found_sections{$required} ) {
             my $desc = qq{Missing "$required" section in POD};
-            push @violations, $self->violation( $desc, $EXPL, $doc );
+            # Report any violations against POD of record rather than whole
+            # document (the point of RT #59268)
+            push @violations, $self->violation( $desc, $EXPL, $pod_of_record );
         }
     }
 
@@ -459,15 +466,21 @@ Currently, this Policy does not look for the required POD sections
 below the C<=head1> level.  Also, it does not require the sections to
 appear in any particular order.
 
+This Policy applies to the entire document, but can be disabled for a
+particular document by a C<## no critic (RequirePodSections)> annotation
+anywhere between the beginning of the document and the first POD section
+containing a C<=head1>, the C<__END__> (if any), or the C<__DATA__> (if any),
+whichever comes first.
+
 
 =head1 AUTHOR
 
-Jeffrey Ryan Thalhammer <thaljef@cpan.org>
+Jeffrey Ryan Thalhammer <jeff@imaginative-software.com>
 
 
 =head1 COPYRIGHT
 
-Copyright (c) 2006-2009 Jeffrey Ryan Thalhammer.  All rights reserved.
+Copyright (c) 2006-2010 Imaginative Software Systems.  All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

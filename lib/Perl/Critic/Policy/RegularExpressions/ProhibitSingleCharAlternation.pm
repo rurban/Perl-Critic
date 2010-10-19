@@ -11,16 +11,15 @@ use 5.006001;
 use strict;
 use warnings;
 
-use English qw(-no_match_vars);
-use Readonly;
 use Carp;
+use English qw(-no_match_vars);
 use List::MoreUtils qw(all);
+use Readonly;
 
 use Perl::Critic::Utils qw{ :booleans :characters :severities };
-use Perl::Critic::Utils::PPIRegexp qw{ ppiify parse_regexp };
 use base 'Perl::Critic::Policy';
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -37,39 +36,46 @@ sub applies_to           { return qw(PPI::Token::Regexp::Match
 
 #-----------------------------------------------------------------------------
 
-sub initialize_if_enabled {
-    return eval { require Regexp::Parser; 1 } ? $TRUE : $FALSE;
-}
-
-#-----------------------------------------------------------------------------
-
 sub violates {
-    my ( $self, $elem, undef ) = @_;
+    my ( $self, $elem, $document ) = @_;
 
     # optimization: don't bother parsing the regexp if there are no pipes
     return if $elem !~ m/[|]/xms;
 
-    my $re = ppiify(parse_regexp($elem));
-    return if !$re;
-
-    # Must pass a sub to find() because our node classes don't start with PPI::
-    my $branches =
-        $re->find(sub {$_[1]->isa('Perl::Critic::PPIRegexp::branch')});
-    return if not $branches;
+    my $re = $document->ppix_regexp_from_element( $elem ) or return;
+    $re->failures() and return;
 
     my @violations;
-    for my $branch (@{$branches}) {
-        my @branch_children = $branch->children;
-        if (all { $_->isa('Perl::Critic::PPIRegexp::exact') } @branch_children) {
-            my @singles = grep { 1 == length $_ } @branch_children;
-            if (1 < @singles) {
-                my $description =
-                      'Use ['
-                    . join( $EMPTY, @singles )
-                    . '] instead of '
-                    . join q<|>, @singles;
-                push @violations, $self->violation( $description, $EXPL, $elem );
+    foreach my $node ( @{ $re->find_parents( sub {
+                return $_[1]->isa( 'PPIx::Regexp::Token::Operator' )
+                && $_[1]->content() eq q<|>;
+            } ) || [] } ) {
+
+        my @singles;
+        my @alternative;
+        foreach my $kid ( $node->children() ) {
+            if ( $kid->isa( 'PPIx::Regexp::Token::Operator' )
+                && $kid->content() eq q<|>
+            ) {
+                @alternative == 1
+                    and $alternative[0]->isa( 'PPIx::Regexp::Token::Literal' )
+                    and push @singles, map { $_->content() } @alternative;
+                @alternative = ();
+            } elsif ( $kid->significant() ) {
+                push @alternative, $kid;
             }
+        }
+        @alternative == 1
+            and $alternative[0]->isa( 'PPIx::Regexp::Token::Literal' )
+            and push @singles, map { $_->content() } @alternative;
+
+        if ( 1 < @singles ) {
+            my $description =
+                  'Use ['
+                . join( $EMPTY, @singles )
+                . '] instead of '
+                . join q<|>, @singles;
+            push @violations, $self->violation( $description, $EXPL, $elem );
         }
     }
 
@@ -114,12 +120,6 @@ exclusively on 5.10, yo might consider ignoring this policy.
 This Policy is not configurable except for the standard options.
 
 
-=head1 PREREQUISITES
-
-This policy will disable itself if L<Regexp::Parser|Regexp::Parser> is not
-installed.
-
-
 =head1 CREDITS
 
 Initial development of this policy was supported by a grant from the
@@ -133,7 +133,7 @@ Chris Dolan <cdolan@cpan.org>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2007-2009 Chris Dolan.  Many rights reserved.
+Copyright (c) 2007-2010 Chris Dolan.  Many rights reserved.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

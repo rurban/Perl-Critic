@@ -10,21 +10,25 @@ package Perl::Critic::Policy::RegularExpressions::ProhibitComplexRegexes;
 use 5.006001;
 use strict;
 use warnings;
+
+use Carp;
+use English qw(-no_match_vars);
+use List::Util qw{ min };
 use Readonly;
 
-use English qw(-no_match_vars);
-use Carp;
-
 use Perl::Critic::Utils qw{ :booleans :severities };
-use Perl::Critic::Utils::PPIRegexp qw{ parse_regexp get_match_string get_modifiers };
+
 use base 'Perl::Critic::Policy';
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
 Readonly::Scalar my $DESC => q{Split long regexps into smaller qr// chunks};
 Readonly::Scalar my $EXPL => [261];
+
+Readonly::Scalar my $MAX_LITERAL_LENGTH => 7;
+Readonly::Scalar my $MAX_VARIABLE_LENGTH => 4;
 
 #-----------------------------------------------------------------------------
 
@@ -49,33 +53,47 @@ sub applies_to           { return qw(PPI::Token::Regexp::Match
 
 #-----------------------------------------------------------------------------
 
-sub initialize_if_enabled {
-    return eval { require Regexp::Parser; 1 } ? $TRUE : $FALSE;
-}
-
-#-----------------------------------------------------------------------------
-
 sub violates {
-    my ( $self, $elem, undef ) = @_;
+    my ( $self, $elem, $document ) = @_;
 
     # Optimization: if its short enough now, parsing won't make it longer
-    return if $self->{_max_characters} >= length get_match_string($elem);
+    return if $self->{_max_characters} >= length $elem->get_match_string();
 
-    # If it has an "x" flag, it might be shorter after comment and whitespace removal
-    my %modifiers = get_modifiers($elem);
-    if ($modifiers{x}) {
-       my $re = parse_regexp($elem);
-       return if !$re; # syntax error, abort
-       my $qr = $re->visual;
+    my $re = $document->ppix_regexp_from_element( $elem )
+        or return;  # Abort on syntax error.
+    $re->failures()
+        and return; # Abort if parse errors found.
+    my $qr = $re->regular_expression()
+        or return;  # Abort if no regular expression.
 
-       # HACK: Remove any (?xism:...) wrapper we may have added in the parse process...
-       $qr =~ s/\A [(][?][xism]+(?:-[xism]+)?: (.*) [)] \z/$1/xms;
+    my $length = 0;
+    # We use map { $_->tokens() } qr->children() rather than just
+    # $qr->tokens() because we are not interested in the delimiters.
+    foreach my $token ( map { $_->tokens() } $qr->children() ) {
 
-       # Hack: don't count long \p{...} expressions against us so badly
-       $qr =~ s/\\[pP][{]\w+[}]/\\p{...}/gxms;
+        # Do not count whitespace or comments
+        $token->significant() or next;
 
-       return if $self->{_max_characters} >= length $qr;
+        if ( $token->isa( 'PPIx::Regexp::Token::Interpolation' ) ) {
+
+            # Do not penalize long variable names
+            $length += min( $MAX_VARIABLE_LENGTH, length $token->content() );
+
+        } elsif ( $token->isa( 'PPIx::Regexp::Token::Literal' ) ) {
+
+            # Do not penalize long literals like \p{...}
+            $length += min( $MAX_LITERAL_LENGTH, length $token->content() );
+
+        } else {
+
+            # Take everything else at face value
+            $length += length $token->content();
+
+        }
+
     }
+
+    return if $self->{_max_characters} >= $length;
 
     return $self->violation( $DESC, $EXPL, $elem );
 }
@@ -109,6 +127,11 @@ together.  This policy flags any regexp that is longer than C<N>
 characters, where C<N> is a configurable value that defaults to 60.
 If the regexp uses the C<x> flag, then the length is computed after
 parsing out any comments or whitespace.
+
+Unfortunately the use of descriptive (and therefore longish) variable
+names can cause regexps to be in violation of this policy, so
+interpolated variables are counted as 4 characters no matter how long
+their names actually are.
 
 
 =head1 CASE STUDY
@@ -174,12 +197,6 @@ F<.perlcriticrc> file like this:
     max_characters = 40
 
 
-=head1 PREREQUISITES
-
-This policy will disable itself if L<Regexp::Parser|Regexp::Parser> is not
-installed.
-
-
 =head1 CREDITS
 
 Initial development of this policy was supported by a grant from the
@@ -193,7 +210,7 @@ Chris Dolan <cdolan@cpan.org>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2007-2009 Chris Dolan.  Many rights reserved.
+Copyright (c) 2007-2010 Chris Dolan.  Many rights reserved.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

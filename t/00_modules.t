@@ -21,7 +21,7 @@ use Test::More;
 
 #-----------------------------------------------------------------------------
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -44,9 +44,9 @@ my @concrete_exceptions = qw{
 };
 
 plan tests =>
-        120
+        144
     +   (  9 * scalar @concrete_exceptions  )
-    +   ( 14 * scalar @bundled_policy_names );
+    +   ( 17 * scalar @bundled_policy_names );
 
 # pre-compute for version comparisons
 my $version_string = __PACKAGE__->VERSION;
@@ -84,6 +84,7 @@ can_ok('Perl::Critic::Config', 'theme');
 can_ok('Perl::Critic::Config', 'top');
 can_ok('Perl::Critic::Config', 'verbose');
 can_ok('Perl::Critic::Config', 'color');
+can_ok('Perl::Critic::Config', 'unsafe_allowed');
 can_ok('Perl::Critic::Config', 'criticism_fatal');
 can_ok('Perl::Critic::Config', 'site_policy_names');
 can_ok('Perl::Critic::Config', 'color_severity_highest');
@@ -91,6 +92,8 @@ can_ok('Perl::Critic::Config', 'color_severity_high');
 can_ok('Perl::Critic::Config', 'color_severity_medium');
 can_ok('Perl::Critic::Config', 'color_severity_low');
 can_ok('Perl::Critic::Config', 'color_severity_lowest');
+can_ok('Perl::Critic::Config', 'program_extensions');
+can_ok('Perl::Critic::Config', 'program_extensions_as_regexes');
 
 #Set -profile to avoid messing with .perlcriticrc
 my $config = Perl::Critic::Config->new( -profile => 'NONE');
@@ -113,12 +116,14 @@ can_ok('Perl::Critic::OptionsProcessor', 'theme');
 can_ok('Perl::Critic::OptionsProcessor', 'top');
 can_ok('Perl::Critic::OptionsProcessor', 'verbose');
 can_ok('Perl::Critic::OptionsProcessor', 'color');
+can_ok('Perl::Critic::OptionsProcessor', 'allow_unsafe');
 can_ok('Perl::Critic::OptionsProcessor', 'criticism_fatal');
 can_ok('Perl::Critic::OptionsProcessor', 'color_severity_highest');
 can_ok('Perl::Critic::OptionsProcessor', 'color_severity_high');
 can_ok('Perl::Critic::OptionsProcessor', 'color_severity_medium');
 can_ok('Perl::Critic::OptionsProcessor', 'color_severity_low');
 can_ok('Perl::Critic::OptionsProcessor', 'color_severity_lowest');
+can_ok('Perl::Critic::OptionsProcessor', 'program_extensions');
 
 my $processor = Perl::Critic::OptionsProcessor->new();
 isa_ok($processor, 'Perl::Critic::OptionsProcessor');
@@ -130,15 +135,34 @@ is($processor->VERSION(), $version_string, 'Perl::Critic::OptionsProcessor versi
 use_ok('Perl::Critic::Policy') or BAIL_OUT(q<Can't continue.>);
 can_ok('Perl::Critic::Policy', 'add_themes');
 can_ok('Perl::Critic::Policy', 'applies_to');
+can_ok('Perl::Critic::Policy', 'default_maximum_violations_per_document');
 can_ok('Perl::Critic::Policy', 'default_severity');
 can_ok('Perl::Critic::Policy', 'default_themes');
+can_ok('Perl::Critic::Policy', 'get_abstract');
+can_ok('Perl::Critic::Policy', 'get_format');
+can_ok('Perl::Critic::Policy', 'get_long_name');
+can_ok('Perl::Critic::Policy', 'get_maximum_violations_per_document');
+can_ok('Perl::Critic::Policy', 'get_parameters');
+can_ok('Perl::Critic::Policy', 'get_raw_abstract');
 can_ok('Perl::Critic::Policy', 'get_severity');
+can_ok('Perl::Critic::Policy', 'get_short_name');
 can_ok('Perl::Critic::Policy', 'get_themes');
+can_ok('Perl::Critic::Policy', 'initialize_if_enabled');
+can_ok('Perl::Critic::Policy', 'is_enabled');
+can_ok('Perl::Critic::Policy', 'is_safe');
 can_ok('Perl::Critic::Policy', 'new');
+can_ok('Perl::Critic::Policy', 'new_parameter_value_exception');
+can_ok('Perl::Critic::Policy', 'parameter_metadata_available');
+can_ok('Perl::Critic::Policy', 'prepare_to_scan_document');
+can_ok('Perl::Critic::Policy', 'set_format');
+can_ok('Perl::Critic::Policy', 'set_maximum_violations_per_document');
 can_ok('Perl::Critic::Policy', 'set_severity');
 can_ok('Perl::Critic::Policy', 'set_themes');
+can_ok('Perl::Critic::Policy', 'throw_parameter_value_exception');
+can_ok('Perl::Critic::Policy', 'to_string');
 can_ok('Perl::Critic::Policy', 'violates');
 can_ok('Perl::Critic::Policy', 'violation');
+can_ok('Perl::Critic::Policy', 'is_safe');
 
 {
     my $policy = Perl::Critic::Policy->new();
@@ -271,16 +295,19 @@ can_ok('Perl::Critic::Command', 'run');
         can_ok($mod, 'default_themes');
         can_ok($mod, 'get_severity');
         can_ok($mod, 'get_themes');
+        can_ok($mod, 'is_enabled');
         can_ok($mod, 'new');
         can_ok($mod, 'set_severity');
         can_ok($mod, 'set_themes');
         can_ok($mod, 'set_themes');
         can_ok($mod, 'violates');
         can_ok($mod, 'violation');
+        can_ok($mod, 'is_safe');
 
         my $policy = $mod->new();
         isa_ok($policy, 'Perl::Critic::Policy');
         is($policy->VERSION(), $version_string, "Version of $mod");
+        ok($policy->is_safe(), "CORE policy $mod is marked safe");
     }
 }
 
@@ -300,7 +327,7 @@ ok( !critique(undef, undef), 'Functional style, undef args');
 
 #-----------------------------------------------------------------------------
 
-# ensure we run true if this test is loaded by
+# ensure we return true if this test is loaded by
 # t/00_modules.t_without_optional_dependencies.t
 1;
 

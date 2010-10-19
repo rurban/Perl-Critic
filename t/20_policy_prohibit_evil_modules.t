@@ -11,14 +11,14 @@ use 5.006001;
 use strict;
 use warnings;
 
-# common P::C testing tools
-use Perl::Critic::TestUtils qw(pcritique);
+use Perl::Critic::TestUtils qw< pcritique >;
+use Perl::Critic::Utils     qw< $EMPTY >;
 
 use Test::More tests => 1;
 
 #-----------------------------------------------------------------------------
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -35,7 +35,7 @@ use Super::Evil::Module;
 
 END_PERL
 
-my $result = eval { pcritique($policy, \$code); 1; };
+my $result = eval { pcritique( $policy, \$code, {modules => $EMPTY} ); 1; };
 ok(
     ! $result,
     "$policy does not run if there are no evil modules configured.",

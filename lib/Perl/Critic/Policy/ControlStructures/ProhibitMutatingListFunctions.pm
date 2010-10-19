@@ -20,7 +20,7 @@ use Perl::Critic::Utils qw{
 
 use base 'Perl::Critic::Policy';
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -152,6 +152,31 @@ sub _is_topic_mutating_regex {
     my $elem = shift;
     return if ! ( $elem->isa('PPI::Token::Regexp::Substitute')
                   || $elem->isa('PPI::Token::Regexp::Transliterate') );
+
+    # Exempt PPI::Token::Regexp::Transliterate objects IF the replacement
+    # string is empty AND neither the /d or /s flags are specified, OR the
+    # replacement string equals the match string AND neither the /c or /s
+    # flags are specified. RT 44515.
+    if ( $elem->isa( 'PPI::Token::Regexp::Transliterate') ) {
+        my $subs = $elem->get_substitute_string();
+        if ( $EMPTY eq $subs ) {
+            my %mods = $elem->get_modifiers();
+            $mods{d} or $mods{s} or return;
+        } elsif ( $elem->get_match_string() eq $subs ) {
+            my %mods = $elem->get_modifiers();
+            $mods{c} or $mods{s} or return;
+        }
+    }
+
+    # As of 5.13.2, the substitute built-in supports the /r modifier, which
+    # causes the operation to return the modified string and leave the
+    # original unmodified. This does not parse under earlier Perls, so there
+    # is no version check.
+
+    if ( $elem->isa( 'PPI::Token::Regexp::Substitute' ) ) {
+        my %mods = $elem->get_modifiers();
+        $mods{r} and return;
+    }
 
     # If the previous sibling does not exist, then
     # the regex implicitly binds to $_
@@ -304,7 +329,7 @@ Michael Wolf <MichaelRWolf@att.net>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2006-2009 Chris Dolan.
+Copyright (c) 2006-2010 Chris Dolan.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

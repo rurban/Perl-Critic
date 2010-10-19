@@ -1,8 +1,8 @@
 ##############################################################################
-#      $URL: http://perlcritic.tigris.org/svn/perlcritic/trunk/Perl-Critic/lib/Perl/Critic/Policy/Subroutines/ProhibitExplicitReturnUndef.pm $
-#     $Date: 2008-10-30 09:20:47 -0700 (Thu, 30 Oct 2008) $
-#   $Author: clonezone $
-# $Revision: 2850 $
+#      $URL$
+#     $Date$
+#   $Author$
+# $Revision$
 ##############################################################################
 
 package Perl::Critic::Policy::Subroutines::ProhibitReturnSort;
@@ -15,7 +15,7 @@ use Readonly;
 use Perl::Critic::Utils qw{ :severities :classification };
 use base 'Perl::Critic::Policy';
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -109,11 +109,11 @@ This Policy was suggested by Ulrich Wisser and the L<http://iis.se> team.
 
 =head1 AUTHOR
 
-Jeffrey Ryan Thalhammer <thaljef@cpan.org>
+Jeffrey Ryan Thalhammer <jeff@imaginative-software.com>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2005-2009 Jeffrey Ryan Thalhammer.  All rights reserved.
+Copyright (c) 2005-2010 Imaginative Software Systems.  All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

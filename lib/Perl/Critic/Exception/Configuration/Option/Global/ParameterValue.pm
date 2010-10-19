@@ -15,7 +15,7 @@ use Readonly;
 
 use Perl::Critic::Utils qw{ :characters };
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -78,6 +78,12 @@ parameter, whether from a F<.perlcriticrc>, another profile file, or
 command line.
 
 
+=head1 INTERFACE SUPPORT
+
+This is considered to be a public class.  Any changes to its interface
+will go through a deprecation cycle.
+
+
 =head1 CLASS METHODS
 
 =over
@@ -114,7 +120,7 @@ Elliot Shank <perl@galumph.com>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2007-2009 Elliot Shank.  All rights reserved.
+Copyright (c) 2007-2010 Elliot Shank.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

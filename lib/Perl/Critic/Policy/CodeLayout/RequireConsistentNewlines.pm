@@ -17,9 +17,9 @@ use PPI::Token::Whitespace;
 use English qw(-no_match_vars);
 use base 'Perl::Critic::Policy';
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
-Readonly::Scalar my $LINE_END => qr/\015{1,2}\012|\012|\015/mxs;
+Readonly::Scalar my $LINE_END => qr/\015{1,2}\012|[\012\015]/mxs;
 
 #-----------------------------------------------------------------------------
 
@@ -112,7 +112,7 @@ Chris Dolan <cdolan@cpan.org>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2006-2009 Chris Dolan.
+Copyright (c) 2006-2010 Chris Dolan.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

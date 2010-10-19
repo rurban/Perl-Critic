@@ -13,17 +13,15 @@ use warnings;
 
 use Carp qw< confess >;
 
-use Test::More tests => 29;
+use Perl::Critic::PolicyConfig;
+
+use Test::More tests => 28;
 
 #-----------------------------------------------------------------------------
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
-
-BEGIN {
-    use_ok('Perl::Critic::PolicyConfig') or confess 'No point in continuing.';
-}
 
 
 {
@@ -174,7 +172,7 @@ sub test_standard_parameters_undef_via_get {
 
 #-----------------------------------------------------------------------------
 
-# ensure we run true if this test is loaded by
+# ensure we return true if this test is loaded by
 # t/01_policy_config.t_without_optional_dependencies.t
 1;
 

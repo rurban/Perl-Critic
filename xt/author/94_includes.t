@@ -19,7 +19,7 @@ use Test::More;
 
 #-----------------------------------------------------------------------------
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -80,11 +80,11 @@ for my $file (@pm) {
         }
 
         my @failures = sort keys %failed;
-        if (@failures) {
-            diag("found deps @{[sort keys %deps]}");
-            diag("Missed @failures");
-        }
-        ok(@failures == 0, $file);
+        ok(@failures == 0, "$file has an include statement for each package that it refers to.")
+            or do {
+                diag("Found dependencies: @{[sort keys %deps]}.");
+                diag("Missing import of: @failures.");
+            };
     }
 }
 
@@ -103,7 +103,7 @@ sub match {
 
 #-----------------------------------------------------------------------------
 
-# ensure we run true if this test is loaded by
+# ensure we return true if this test is loaded by
 # t/94_includes.t.t.without_optional_dependencies.t
 1;
 

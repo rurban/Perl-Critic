@@ -12,10 +12,12 @@ use strict;
 use warnings;
 use Readonly;
 
+use List::Util qw< first >;
+
 use Perl::Critic::Utils qw{ :severities };
 use base 'Perl::Critic::Policy';
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -24,18 +26,25 @@ Readonly::Scalar my $EXPL => [ 211 ];
 
 #-----------------------------------------------------------------------------
 
-sub supported_parameters { return ()                           }
-sub default_severity     { return $SEVERITY_HIGH               }
-sub default_themes       { return qw( core bugs pbp )          }
-sub applies_to           { return qw( PPI::Structure::ForLoop) }
+sub supported_parameters { return ()                             }
+sub default_severity     { return $SEVERITY_HIGH                 }
+sub default_themes       { return qw< core bugs pbp >            }
+sub applies_to           { return qw< PPI::Statement::Compound > }
 
 #-----------------------------------------------------------------------------
 
 sub violates {
     my ( $self, $elem, undef ) = @_;
 
-    if ( my $rl = $elem->find_first('PPI::Token::QuoteLike::Readline') ) {
-        return $self->violation( $DESC, $EXPL, $rl );
+    return if $elem->type() ne 'foreach';
+
+    my $list = first { $_->isa('PPI::Structure::List') } $elem->schildren()
+        or return;
+
+    if (
+        my $readline = $list->find_first('PPI::Token::QuoteLike::Readline')
+    ) {
+        return $self->violation( $DESC, $EXPL, $readline );
     }
 
     return;  #ok!
@@ -78,11 +87,11 @@ This Policy is not configurable except for the standard options.
 
 =head1 AUTHOR
 
-Jeffrey Ryan Thalhammer <thaljef@cpan.org>
+Jeffrey Ryan Thalhammer <jeff@imaginative-software.com>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2005-2009 Jeffrey Ryan Thalhammer.  All rights reserved.
+Copyright (c) 2005-2010 Imaginative Software Systems.  All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

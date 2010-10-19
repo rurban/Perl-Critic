@@ -16,7 +16,7 @@ use Readonly;
 use Perl::Critic::Utils qw{ :severities };
 use base 'Perl::Critic::Policy';
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -84,7 +84,8 @@ distribution.
 
 Long C<if-elsif> chains are hard to digest, especially if they are
 longer than a single page or screen.  If testing for equality, use a
-hash lookup instead.  See L<Switch|Switch> for another approach.
+hash lookup instead.  If you're using perl 5.10 or later, use
+C<given>/C<when>.
 
     if ($condition1) {         #ok
         $foo = 1;
@@ -113,11 +114,11 @@ C<max_elsif> item in the F<.perlcriticrc> file:
 
 =head1 AUTHOR
 
-Jeffrey Ryan Thalhammer <thaljef@cpan.org>
+Jeffrey Ryan Thalhammer <jeff@imaginative-software.com>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2005-2009 Jeffrey Ryan Thalhammer.  All rights reserved.
+Copyright (c) 2005-2010 Imaginative Software Systems.  All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

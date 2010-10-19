@@ -17,11 +17,11 @@ use List::MoreUtils qw(any);
 use Perl::Critic::Utils qw{ :severities };
 use base 'Perl::Critic::Policy';
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
-Readonly::Scalar my $DESC => q{No "$VERSION" variable found}; ## no critic (RequireInterpolation)
+Readonly::Scalar my $DESC => q{No package-scoped "$VERSION" variable found}; ## no critic (RequireInterpolation)
 Readonly::Scalar my $EXPL => [ 404 ];
 
 #-----------------------------------------------------------------------------
@@ -123,8 +123,8 @@ distribution.
 =head1 DESCRIPTION
 
 Every Perl file (modules, libraries, and programs) should have a
-C<$VERSION> variable.  The C<$VERSION> allows clients to insist on a
-particular revision of your file like this:
+package-scoped C<$VERSION> variable.  The C<$VERSION> allows clients to
+insist on a particular revision of your file like this:
 
     use SomeModule 2.4;  #Only loads version 2.4
 
@@ -136,6 +136,12 @@ have to declare it like one of these:
     $MyPackage::VERSION = 1.061;
     use vars qw($VERSION);
     use version; our $VERSION = qv(1.0611);
+
+Perl's version system does not recognize lexical variables such as
+
+    my $VERSION = 1.0611;
+
+so they are not accepted by this policy.
 
 A common practice is to use the C<$Revision$> keyword to
 automatically define the C<$VERSION> variable like this:
@@ -171,12 +177,12 @@ C<$VERSION> is undefined.
 
 =head1 AUTHOR
 
-Jeffrey Ryan Thalhammer <thaljef@cpan.org>
+Jeffrey Ryan Thalhammer <jeff@imaginative-software.com>
 
 
 =head1 COPYRIGHT
 
-Copyright (c) 2005-2009 Jeffrey Ryan Thalhammer.  All rights reserved.
+Copyright (c) 2005-2010 Imaginative Software Systems.  All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

@@ -13,10 +13,10 @@ use warnings;
 use Readonly;
 
 use Perl::Critic::Utils qw{ :severities };
-use Perl::Critic::Utils::PPIRegexp qw{ get_modifiers get_match_string };
+
 use base 'Perl::Critic::Policy';
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -60,11 +60,11 @@ sub applies_to           {
 sub violates {
     my ( $self, $elem, undef ) = @_;
 
-    my $match = get_match_string($elem);
+    my $match = $elem->get_match_string();
     return if length $match <= $self->{_minimum_regex_length_to_complain_about};
     return if not $self->{_strict} and $match =~ m< \A [\s\w]* \z >xms;
 
-    my %mods = get_modifiers($elem);
+    my %mods = $elem->get_modifiers();
     if ( not $mods{x} ) {
         return $self->violation( $DESC, $EXPL, $elem );
     }
@@ -162,12 +162,12 @@ front and don't use C<\E> until the very end, if at all.
 
 =head1 AUTHOR
 
-Jeffrey Ryan Thalhammer  <thaljef@cpan.org>
+Jeffrey Ryan Thalhammer  <jeff@imaginative-software.com>
 
 
 =head1 COPYRIGHT
 
-Copyright (c) 2005-2009 Jeffrey Ryan Thalhammer. All rights reserved.
+Copyright (c) 2005-2010 Imaginative Software Systems. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

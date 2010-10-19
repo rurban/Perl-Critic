@@ -25,7 +25,7 @@ use Test::More; #plan set below
 
 #-----------------------------------------------------------------------------
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -51,7 +51,7 @@ eval 'use Test::Memory::Cycle; 1'
 
     my $code    = q<print foo(); split /this/, $that;>; ## no critic (RequireInterpolationOfMetachars)
     my $ppi_doc = PPI::Document->new( \$code );
-    my $pc_doc  = Perl::Critic::Document->new( $ppi_doc );
+    my $pc_doc  = Perl::Critic::Document->new( '-source' => $ppi_doc );
     my $critic  = Perl::Critic->new( -severity => 1 );
     my @violations = $critic->critique( $pc_doc );
     confess 'No violations were created' if not @violations;
@@ -68,7 +68,7 @@ eval 'use Test::Memory::Cycle; 1'
 
 #-----------------------------------------------------------------------------
 
-# ensure we run true if this test is loaded by
+# ensure we return true if this test is loaded by
 # t/92_memory_leaks.t.without_optional_dependencies.t
 1;
 

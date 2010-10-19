@@ -15,7 +15,7 @@ use Readonly;
 use Perl::Critic::Utils qw{ :severities :classification };
 use base 'Perl::Critic::Policy';
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -34,7 +34,7 @@ sub applies_to           { return 'PPI::Document'     }
 sub prepare_to_scan_document {
     my ( $self, $document ) = @_;
 
-    return not is_script($document);   # Must be a library or module.
+    return $document->is_module();   # Must be a library or module.
 }
 
 sub violates {
@@ -101,7 +101,7 @@ L<Perl::Critic::Policy::Modules::RequireExplicitPackage|Perl::Critic::Policy::Mo
 
 =head1 COPYRIGHT
 
-Copyright (c) 2005-2009 Chris Dolan and Jeffrey Ryan Thalhammer.  All
+Copyright (c) 2005-2010 Chris Dolan and Imaginative Software Systems.  All
 rights reserved.
 
 This program is free software; you can redistribute it and/or modify

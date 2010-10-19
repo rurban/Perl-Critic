@@ -23,11 +23,12 @@ use Perl::Critic::Utils qw<
     :characters :severities policy_short_name
     $DEFAULT_VERBOSITY $DEFAULT_VERBOSITY_WITH_FILE_NAME
 >;
+use Perl::Critic::Utils::Constants qw< $_MODULE_VERSION_TERM_ANSICOLOR >;
 use Perl::Critic::Violation qw<>;
 
 #-----------------------------------------------------------------------------
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -129,14 +130,15 @@ sub _parse_command_line {
 
 sub _dispatch_special_requests {
     my (%opts) = @_;
-    if ( $opts{-help}            ) { pod2usage( -verbose => 0 )  }  #Exits
-    if ( $opts{-options}         ) { pod2usage( -verbose => 1 )  }  #Exits
-    if ( $opts{-man}             ) { pod2usage( -verbose => 2 )  }  #Exits
-    if ( $opts{-version}         ) { display_version()           }  #Exits
-    if ( $opts{-list}            ) { render_policy_listing();    }  #Exits
-    if ( $opts{'-list-themes'}   ) { render_theme_listing();     }  #Exits
-    if ( $opts{'-profile-proto'} ) { render_profile_prototype(); }  #Exits
-    if ( $opts{-doc}             ) { policy_docs( %opts );       }  #Exits
+    if ( $opts{-help}            ) { pod2usage( -verbose => 0 )    }  # Exits
+    if ( $opts{-options}         ) { pod2usage( -verbose => 1 )    }  # Exits
+    if ( $opts{-man}             ) { pod2usage( -verbose => 2 )    }  # Exits
+    if ( $opts{-version}         ) { _display_version()            }  # Exits
+    if ( $opts{-list}            ) { _render_all_policy_listing()  }  # Exits
+    if ( $opts{'-list-enabled'}  ) { _render_policy_listing(%opts) }  # Exits
+    if ( $opts{'-list-themes'}   ) { _render_theme_listing()       }  # Exits
+    if ( $opts{'-profile-proto'} ) { _render_profile_prototype()   }  # Exits
+    if ( $opts{-doc}             ) { _render_policy_docs( %opts )  }  # Exits
     return 1;
 }
 
@@ -151,7 +153,7 @@ sub _validate_options {
         $msg .= qq{Warning: Cannot use -noprofile with -profile option.\n};
     }
 
-    if ( $opts{-verbose} && $opts{-verbose} !~ m{(?: \d+ | %[mfFlcedrpPs] )}xms) {
+    if ( $opts{-verbose} && $opts{-verbose} !~ m{(?: \d+ | %[mfFlcCedrpPs] )}xms) {
         $msg .= qq<Warning: --verbose arg "$opts{-verbose}" looks odd.  >;
         $msg .= qq<Perhaps you meant to say "--verbose 3 $opts{-verbose}."\n>;
     }
@@ -281,11 +283,20 @@ sub _critique {
 #------------------------------------------------------------------------------
 
 sub _render_report {
-
     my ( $file, $opts_ref, @violations ) = @_;
 
-    # Only report the number of violations, if asked.
+    # Only report the files, if asked.
     my $number_of_violations = scalar @violations;
+    if ( $opts_ref->{'-files-with-violations'} ||
+        $opts_ref->{'-files-without-violations'} ) {
+        not ref $file
+            and $opts_ref->{$number_of_violations ? '-files-with-violations' :
+            '-files-without-violations'}
+            and _out "$file\n";
+        return $number_of_violations;
+    }
+
+    # Only report the number of violations, if asked.
     if( $opts_ref->{-count} ){
         ref $file || _out "$file: ";
         _out "$number_of_violations\n";
@@ -350,12 +361,28 @@ sub _report_statistics {
     my $subroutines = _commaify($statistics->subs());
     my $statements = _commaify($statistics->statements_other_than_subs());
     my $lines = _commaify($statistics->lines());
-    my $width = max map { length } $files, $subroutines, $statements, $lines;
+    my $width = max map { length } $files, $subroutines, $statements;
 
     _out sprintf "%*s %s.\n", $width, $files, 'files';
     _out sprintf "%*s %s.\n", $width, $subroutines, 'subroutines/methods';
     _out sprintf "%*s %s.\n", $width, $statements, 'statements';
-    _out sprintf "%*s %s.\n", $width, $lines, 'lines';
+
+    my $lines_of_blank = _commaify( $statistics->lines_of_blank() );
+    my $lines_of_comment = _commaify( $statistics->lines_of_comment() );
+    my $lines_of_data = _commaify( $statistics->lines_of_data() );
+    my $lines_of_perl = _commaify( $statistics->lines_of_perl() );
+    my $lines_of_pod = _commaify( $statistics->lines_of_pod() );
+
+    $width =
+        max map { length }
+            $lines_of_blank, $lines_of_comment, $lines_of_data,
+            $lines_of_perl,  $lines_of_pod;
+    _out sprintf "\n%s %s:\n",            $lines, 'lines, consisting of';
+    _out sprintf "    %*s %s.\n", $width, $lines_of_blank, 'blank lines';
+    _out sprintf "    %*s %s.\n", $width, $lines_of_comment, 'comment lines';
+    _out sprintf "    %*s %s.\n", $width, $lines_of_data, 'data lines';
+    _out sprintf "    %*s %s.\n", $width, $lines_of_perl, 'lines of Perl code';
+    _out sprintf "    %*s %s.\n", $width, $lines_of_pod, 'lines of POD';
 
     my $average_sub_mccabe = $statistics->average_sub_mccabe();
     if (defined $average_sub_mccabe) {
@@ -447,7 +474,7 @@ sub _commaify {
 
 sub _get_option_specification {
 
-    return qw(
+    return qw<
         5 4 3 2 1
         Safari
         version
@@ -462,6 +489,7 @@ sub _get_option_specification {
         help|?|H
         include=s@
         list
+        list-enabled
         list-themes
         man
         color|colour!
@@ -480,13 +508,17 @@ sub _get_option_specification {
         profile-strictness=s
         theme=s
         top:i
+        allow-unsafe
         verbose=s
         color-severity-highest|colour-severity-highest|color-severity-5|colour-severity-5=s
         color-severity-high|colour-severity-high|color-severity-4|colour-severity-4=s
         color-severity-medium|colour-severity-medium|color-severity-3|colour-severity-3=s
         color-severity-low|colour-severity-low|color-severity-2|colour-severity-2=s
         color-severity-lowest|colour-severity-lowest|color-severity-1|colour-severity-1=s
-    );
+        files-with-violations|l
+        files-without-violations|L
+        program-extensions=s@
+    >;
 }
 
 #-----------------------------------------------------------------------------
@@ -494,7 +526,11 @@ sub _get_option_specification {
 sub _colorize_by_severity {
     my @violations = @_;
     return @violations if _this_is_windows();
-    return @violations if not eval { require Term::ANSIColor; 1; };
+    return @violations if not eval {
+        require Term::ANSIColor;
+        Term::ANSIColor->VERSION( $_MODULE_VERSION_TERM_ANSICOLOR );
+        1;
+    };
 
     my $config = $critic->config();
     my %color_of = (
@@ -539,17 +575,25 @@ sub _at_tty {
 
 #-----------------------------------------------------------------------------
 
+sub _render_all_policy_listing {
+    # Force P-C parameters, to catch all Policies on this site
+    my %pc_params = (-profile => $EMPTY, -severity => $SEVERITY_LOWEST);
+    return _render_policy_listing( %pc_params );
+}
+
+#-----------------------------------------------------------------------------
+
 sub _render_policy_listing {
+    my %pc_params = @_;
 
     require Perl::Critic::PolicyListing;
     require Perl::Critic;
 
-    my %pc_params = (-profile => $EMPTY, -severity => $SEVERITY_LOWEST);
     my @policies = Perl::Critic->new( %pc_params )->policies();
     my $listing = Perl::Critic::PolicyListing->new( -policies => \@policies );
     _out $listing;
 
-    exit $EXIT_SUCCESS; ## no critic qw(ProhibitExit)
+    exit $EXIT_SUCCESS;
 }
 
 #-----------------------------------------------------------------------------
@@ -564,7 +608,7 @@ sub _render_theme_listing {
     my $listing = Perl::Critic::ThemeListing->new( -policies => \@policies );
     _out $listing;
 
-    exit $EXIT_SUCCESS; ## no critic qw(ProhibitExit)
+    exit $EXIT_SUCCESS;
 }
 
 #-----------------------------------------------------------------------------
@@ -579,19 +623,19 @@ sub _render_profile_prototype {
     my $prototype = Perl::Critic::ProfilePrototype->new( -policies => \@policies );
     _out $prototype;
 
-    exit $EXIT_SUCCESS; ## no critic qw(ProhibitExit)
+    exit $EXIT_SUCCESS;
 }
 
 #-----------------------------------------------------------------------------
 
-sub _policy_docs {
+sub _render_policy_docs {
 
     my (%opts) = @_;
     my $pattern = delete $opts{-doc};
 
     require Perl::Critic;
     $critic = Perl::Critic->new(%opts);
-    set_up_pager($critic->config()->pager());
+    _set_up_pager($critic->config()->pager());
 
     require Perl::Critic::PolicyFactory;
     my @site_policies  = Perl::Critic::PolicyFactory->site_policy_names();
@@ -601,14 +645,14 @@ sub _policy_docs {
     my @perldoc_output = map {`perldoc -T $_`} @matching_policies;  ## no critic (ProhibitBacktick)
     _out @perldoc_output;
 
-    exit $EXIT_SUCCESS; ## no critic qw(ProhibitExit)
+    exit $EXIT_SUCCESS;
 }
 
 #-----------------------------------------------------------------------------
 
 sub _display_version {
     _out "$VERSION\n";
-    exit $EXIT_SUCCESS;  ## no critic qw(ProhibitExit)
+    exit $EXIT_SUCCESS;
 }
 
 #-----------------------------------------------------------------------------
@@ -625,7 +669,7 @@ Twitter
 
 =head1 NAME
 
-Perl::Critic::Command - Guts of L<perlcritic>.
+Perl::Critic::Command - Guts of L<perlcritic|perlcritic>.
 
 
 =head1 SYNOPSIS
@@ -638,8 +682,14 @@ Perl::Critic::Command - Guts of L<perlcritic>.
 
 =head1 DESCRIPTION
 
-This is the implementation of the L<perlcritic> command.  You can use this to
-run the command without going through a command interpreter.
+This is the implementation of the L<perlcritic|perlcritic> command.  You can use
+this to run the command without going through a command interpreter.
+
+
+=head1 INTERFACE SUPPORT
+
+This is considered to be a public class.  However, its interface is
+experimental, and will likely change.
 
 
 =head1 IMPORTABLE SUBROUTINES
@@ -648,9 +698,10 @@ run the command without going through a command interpreter.
 
 =item C<run()>
 
-Does the equivalent of the L<perlcritic> command.  Unfortunately, at present,
-this doesn't take any parameters but uses C<@ARGV> to get its input instead.
-Count on this changing; don't count on the current interface.
+Does the equivalent of the L<perlcritic|perlcritic> command.  Unfortunately, at
+present, this doesn't take any parameters but uses C<@ARGV> to get its
+input instead.  Count on this changing; don't count on the current
+interface.
 
 
 =back
@@ -658,20 +709,20 @@ Count on this changing; don't count on the current interface.
 
 =head1 TO DO
 
-Make C<run()> take parameters.  The equivalent of C<@ARGV> should be passed as
-a reference.
+Make C<run()> take parameters.  The equivalent of C<@ARGV> should be
+passed as a reference.
 
 Turn this into an object.
 
 
 =head1 AUTHOR
 
-Jeffrey Ryan Thalhammer <thaljef@cpan.org>
+Jeffrey Ryan Thalhammer <jeff@imaginative-software.com>
 
 
 =head1 COPYRIGHT
 
-Copyright (c) 2005-2009 Jeffrey Ryan Thalhammer.  All rights reserved.
+Copyright (c) 2005-2010 Imaginative Software Systems.  All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

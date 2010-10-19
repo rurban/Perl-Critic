@@ -13,12 +13,12 @@ use warnings;
 
 use English qw<-no_match_vars>;
 
-use Test::More tests => 26;
+use Test::More tests => 29;
 
 
 #-----------------------------------------------------------------------------
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -43,8 +43,19 @@ my $p = PolicyTest->new();
 isa_ok($p, 'PolicyTest');
 
 
-eval { $p->violates(); };
+local $EVAL_ERROR = undef;
+eval { $p->violates(); 1 };
 ok($EVAL_ERROR, 'abstract violates() throws exception');
+
+
+is(
+    $p->is_enabled(),
+    undef,
+    'is_enabled() initially returns undef',
+);
+
+
+ok( !! $p->is_safe(), 'is_safe() returns a true value by default.' );
 
 
 # Test default application...
@@ -81,6 +92,12 @@ is(
 
 my $overridden_default = PolicyTestOverriddenDefaultMaximumViolations->new();
 isa_ok($overridden_default, 'PolicyTestOverriddenDefaultMaximumViolations');
+
+is(
+    $overridden_default->is_enabled(),
+    undef,
+    'is_enabled() initially returns undef',
+);
 
 # Test default maximum violations per document...
 is(
@@ -163,7 +180,7 @@ is( "$p", $expected_string, 'Stringification by overloading');
 
 #-----------------------------------------------------------------------------
 
-# ensure we run true if this test is loaded by
+# ensure we return true if this test is loaded by
 # t/02_policy.t_without_optional_dependencies.t
 1;
 

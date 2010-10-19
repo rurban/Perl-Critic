@@ -17,10 +17,10 @@ use Perl::Critic::Command qw< run >;
 
 #-----------------------------------------------------------------------------
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
-# Begin script.  Don't run when loaded as a library
+# Begin program.  Don't run when loaded as a library
 
 # This %ENV check is to allow perlcritic to function when bundled under PAR,
 # which invokes this program not as the top stack frame. -- rjbs, 2008-08-11
@@ -53,18 +53,21 @@ C<perlcritic> - Command-line interface to critique Perl source.
              [--exclude pattern] [{-s | --single-policy} pattern]
              [--only | --noonly] [--profile-strictness {warn|fatal|quiet}]
              [--force | --noforce] [--statistics] [--statistics-only]
-             [--count | -C] [--verbose {number | format}]
+             [--count | -C] [--verbose {number | format}] [--allow-unsafe]
              [--color | --nocolor] [--pager pager] [--quiet]
              [--color-severity-highest color_specification]
              [--color-severity-high color_specification]
              [--color-severity-medium color_specification]
              [--color-severity-low color_specification]
              [--color-severity-lowest color_specification]
+             [--files-with-violations | -l]
+             [--files-without-violations | -L]
+             [--program-extensions file_name_extension]
              {FILE | DIRECTORY | STDIN}
 
   perlcritic --profile-proto
 
-  perlcritic { --list | --list-themes | --doc pattern [...] }
+  perlcritic { --list | --list-enabled | --list-themes | --doc pattern [...] }
 
   perlcritic { --help | --options | --man | --version }
 
@@ -342,6 +345,7 @@ characters are:
     %P        Full name of the Policy module that created the violation
     %p        Name of the Policy without the Perl::Critic::Policy:: prefix
     %r        The string of source code that caused the violation
+    %C        The class of the PPI::Element that caused the violation
     %s        The severity level of the violation
 
 The purpose of these formats is to provide some compatibility with
@@ -351,9 +355,20 @@ input. See L<"EDITOR INTEGRATION"> for more information about that.
 =item C<--list>
 
 Displays a condensed listing of all the
-L<Perl::Critic::Policy|Perl::Critic::Policy> modules that are found on
-this machine.  For each Policy, the name, default severity and default
-themes are shown.
+L<Perl::Critic::Policy|Perl::Critic::Policy> modules that are found on this
+machine.  This option lists I<all> Policies, regardless of your
+F<.perlcriticrc> or command line options.  For each Policy, the name, default
+severity and default themes are shown.
+
+=item C<--list-enabled>
+
+Displays a condensed listing of all the
+L<Perl::Critic::Policy|Perl::Critic::Policy> modules that I<would> be
+enforced, if you were actually going to critique a file with this command.
+This is useful when you've constructed a complicated command or modified your
+F<.perlcriticrc> file and you want to see exactly which Policies are going to
+be enforced (or not enforced, as the case may be). For each Policy, the name,
+default severity and default themes are shown.
 
 =item C<--list-themes>
 
@@ -456,6 +471,37 @@ Term::ANSIColor color specification. Can also be specified as
 C<--colour-severity-lowest>, C<--color-severity-1>, or
 C<--colour-severity-1>.
 
+=item C<--files-with-violations>
+
+Display only the names of files with violations.  Use this feature
+with --single-policy to find files that contain violations of a given
+policy. Can also be specified as C<--l>.
+
+=item C<--files-without-violations>
+
+Display only the names of files without violations.  Use this feature
+with --single-policy to find files that do not contain violations of a
+given policy. Can also be specified as C<--L>.
+
+=item C<--program-extensions file_name_extension>
+
+Tell C<perlcritic> to treat files whose names end in the given file name
+extension as programs, not as modules. If a leading '.' is desired it must be
+explicitly specified, e.g.
+
+    --program-extensions .pl
+
+The matching is case-sensitive, and the option may be specified as many times
+as desired, e.g.
+
+    --program-extensions .pl --program-extensions .cgi
+
+The above can also be done by quoting the file name extensions:
+
+    --program-extensions '.pl .cgi'
+
+Files whose name ends in '.PL' will always be considered programs.
+
 =item C<--doc PATTERN>
 
 Displays the perldoc for all
@@ -464,6 +510,18 @@ C<m/PATTERN/ixms>.  Since Policy modules tend to have rather long
 names, this just provides a more convenient way to say something like:
 C<"perldoc Perl::Critic::Policy::ValuesAndExpressions::RequireUpperCaseHeredocTerminator">
 at the command prompt.
+
+=item C<--allow-unsafe>
+
+This option directs C<perlcritic> to allow the use of Policies that have been
+marked as "unsafe".  Unsafe Policies may result in risky operations by
+compiling and executing the code they analyze.  All the Policies that ship in
+the core L<Perl::Critic|Perl::Critic> distribution are safe.  However,
+third-party Policies, such as those in the
+L<Perl::Critic::Dynamic|Perl::Critic::Dynamic> distribution are not safe.
+Note that "safety" is honorary -- if a Policy author marks a Policy as safe,
+it is not a guarantee that it won't do nasty things.  B<If you don't trust
+your Policies and the code you are analyzing, then do not use this switch>.
 
 =item C<--quiet>
 
@@ -655,7 +713,7 @@ Each Policy is defined with one or more "themes".  Themes can be used
 to create arbitrary groups of Policies.  They are intended to provide
 an alternative mechanism for selecting your preferred set of Policies.
 For example, you may wish disable a certain set of Policies when
-analyzing test scripts.  Conversely, you may wish to enable only a
+analyzing test programs.  Conversely, you may wish to enable only a
 specific subset of Policies when analyzing modules.
 
 The Policies that ship with Perl::Critic are have been divided into
@@ -672,7 +730,7 @@ needs.
     cosmetic          Policies that only have a superficial effect
     complexity        Policies that specificaly relate to code complexity
     security          Policies that relate to security issues
-    tests             Policies that are specific to test scripts
+    tests             Policies that are specific to test programs
 
 Say C<"perlcritic --list"> to get a listing of all available policies
 and the themes that are associated with each one.  You can also change
@@ -722,12 +780,11 @@ certain lines or blocks of code by using annotations:
       do_something($_);
   }
 
-The C<"## no critic"> annotations direct Perl::Critic to ignore the
-remaining lines of code until the end of the current block, or until a
-C<"## use critic"> annotation is found (whichever comes first).  If the
-C<"## no critic"> annotation is on the same line as a code statement,
-then only that line of code is overlooked.  To direct perlcritic to
-ignore the C<"## no critic"> annotations, use the C<--force> option.
+The C<"## no critic"> annotations direct Perl::Critic to ignore the remaining
+lines of code until a C<"## use critic"> annotation is found. If the C<"## no
+critic"> annotation is on the same line as a code statement, then only that
+line of code is overlooked.  To direct perlcritic to ignore the C<"## no
+critic"> annotations, use the C<--force> option.
 
 A bare C<"## no critic"> annotation disables all the active Policies.  If
 you wish to disable only specific Policies, add a list of Policy names
@@ -838,7 +895,7 @@ complete details.
 EPIC is an open source Perl IDE based on the Eclipse platform.
 Features include syntax highlighting, on-the-fly syntax check,
 content assist, code completion, perldoc support, source formatting
-with L<Perl::Tidy>, code templates, a regular expression editing tool,
+with L<Perl::Tidy|Perl::Tidy>, code templates, a regular expression editing tool,
 and integration with the Perl debugger.  Recent versions of EPIC also
 have built-in support for Perl::Critic.  At least one Perl::Critic
 contributor swears by EPIC.  Go to L<http://e-p-i-c.sourceforge.net>
@@ -846,21 +903,26 @@ for more information about EPIC.
 
 =head2 BBEdit
 
-Josh Clark has produced an excellent Perl-Critic plugin for BBEdit. A
-copy is included in this distribution at
-F<extras/perl_critic_for_bbedit-1_0.zip>. See
-L<http://beta.bigmedium.com/projects/bbedit-perl-critic/index.shtml>
-for screenshots and additional installation info.  Apple users
-rejoice!
+Josh Clark has produced an excellent Perl-Critic plugin for BBEdit. See
+L<http://globalmoxie.com/projects/bbedit-perl-critic/index.shtml> for
+download, installation, and usage instructions.  Apple users rejoice!
 
 
 =head2 Komodo
 
-Komodo is a proprietary IDE for Perl and several other dynamic
-languages.  Free trial copies of Komodo can be obtained from the
-ActiveState website at L<http://www.activestate.com>. For instructions
-on integrating F<perlcritic> with Komodo, see
-F<extras/KomodoIntegration.pod> in this distribution.
+Komodo is a proprietary IDE for Perl and several other dynamic languages.
+Starting in version 5.1.1, Komodo has built-in support for Perl-Critic, if you
+have the L<Perl::Critic|Perl::Critic> and L<criticism|criticism> modules
+installed.  Free trial copies of Komodo can be obtained from the ActiveState
+website at L<http://www.activestate.com>.
+
+
+=head2 PDK
+
+ActiveState also makes a Perl Development Kit (PDK).  Starting with version 8,
+the PDK includes a very slick graphical interface for configuring and running
+Perl-Critic.   Free trial copies of the PDK can be obtained from the ActiveState
+website at L<http://www.activestate.com>.
 
 
 =head1 EXIT STATUS
@@ -900,11 +962,11 @@ this distribution for a step-by-step demonstration of how to create
 new Policy modules.
 
 If you develop any new Policy modules, feel free to send them to C<<
-<thaljef@cpan.org> >> and I'll be happy to put them into the
+<jeff@imaginative-software.com> >> and I'll be happy to put them into the
 Perl::Critic distribution.  Or if you would like to work on the
 Perl::Critic project directly, check out our repository at
 L<http://perlcritic.tigris.org>.  To subscribe to our mailing list,
-send a message to C<< <dev-subscribe@perlcritic.tigris.org> >>.
+send a message to L<mailto:dev-subscribe@perlcritic.tigris.org>.
 
 The Perl::Critic team is also available for hire.  If your
 organization has its own coding standards, we can create custom
@@ -912,20 +974,21 @@ Policies to enforce your local guidelines.  Or if your code base is
 prone to a particular defect pattern, we can design Policies that will
 help you catch those costly defects B<before> they go into production.
 To discuss your needs with the Perl::Critic team, just contact C<<
-<thaljef@cpan.org> >>.
+<jeff@imaginative-software.com> >>.
 
 
 =head1 CONTACTING THE DEVELOPMENT TEAM
 
 You are encouraged to subscribe to the mailing list; send a message to
-C<< <users-subscribe@perlcritic.tigris.org> >>.  See also
-L<the archives|http://perlcritic.tigris.org/servlets/SummarizeList?listName=users>.
-You can also contact the author at C<< <thaljef@cpan.org> >>.
+L<mailto:users-subscribe@perlcritic.tigris.org>.  See also the archives at
+L<http://perlcritic.tigris.org/servlets/SummarizeList?listName=users>.
+You can also contact the author at C<< <jeff@imaginative-software.com> >>.
 
 At least one member of the development team has started hanging around
 in L<irc://irc.perl.org/#perlcritic>.
 
-Follow L<Perl::Critic|https://twitter.com/perlcritic> on Twitter.
+You can also follow Perl::Critic on Twitter, at
+L<https://twitter.com/perlcritic>.
 
 
 =head1 SEE ALSO
@@ -944,12 +1007,14 @@ These distributions enable you to use Perl::Critic in your unit tests:
 L<Test::Perl::Critic|Test::Perl::Critic>
 L<Test::Perl::Critic::Progressive|Test::Perl::Critic::Progressive>
 
-There are also a couple of distributions that will install all the
-Perl::Critic related modules known to the development team:
+There is also a distribution that will install all the Perl::Critic related
+modules known to the development team:
 
-L<Bundle::Perl::Critic|Bundle::Perl::Critic>
 L<Task::Perl::Critic|Task::Perl::Critic>
 
+Also, the Perl Development Kit (PDK 8.0) from ActiveState includes
+a very slick graphical interface to Perl-Critic.  For details,
+go to L<http://www.activestate.com/perl_dev_kit>
 
 =head1 BUGS
 
@@ -982,12 +1047,12 @@ and Sharon, my wife - For putting up with my all-night code sessions.
 
 =head1 AUTHOR
 
-Jeffrey Ryan Thalhammer <thaljef@cpan.org>
+Jeffrey Ryan Thalhammer <jeff@imaginative-software.com>
 
 
 =head1 COPYRIGHT
 
-Copyright (c) 2005-2009 Jeffrey Ryan Thalhammer.  All rights reserved.
+Copyright (c) 2005-2010 Imaginative Software Systems.  All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

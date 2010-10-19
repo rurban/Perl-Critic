@@ -1,4 +1,360 @@
-[1.xxx_xxx] Released on 2009-xx-xx
+Next release whenever it is
+
+    New Features:
+    * uses_module(), namespaces(), and subdocuments_for_namespace() methods on
+      Perl::Critic::Document.
+    * Perl::Critic::Document->new() now accepts a -forced-filename argument
+      for setting the filename when the source code comes from something
+      other than an actual file.
+    * New policy InputOutput::RequireEncodingWithUTF8Layer to recommend
+      ':encoding(utf8)' over ':utf8' in open() and binmode(). It is
+      severity 5 because of the bad things that can happen if invalid
+      UTF8 gets loose in your code.
+    * New policy Modules::ProhibitConditionalUseStatements to prohibit
+      'use module' inside a conditional, since the statement is executed
+      unconditionally at compile time.  Thanks to Peter Guzis for
+      submitting the policy and tests in RT #59065.
+
+    Policy Changes:
+    * ControlStructures::ProhibitMutatingListFunctions allows s///r,
+      which was introduced in 5.13.2.
+    * ControlStructures::ProhibitPostfixControls now looks for "when".  It is
+      treated in the same way as "if".
+    * Subroutines::ProhibitUnusedPrivateSubroutines now looks inside
+      regular expressions.
+    * ValuesAndExpressions::ProhibitMismatchedOperators didn't handle file
+      test operators properly.  Patch by H.Merijn Brand.  RT #58751
+    * Variables::ProhibitUnusedVariables now looks inside regular
+      expressions.
+    * Documentation::RequirePodSections now honors '## no critic'
+      annotation anywhere before the '__END__', '__DATA__', or first
+      '=head1', whichever comes first.  The line number of the offending
+      '=head1 NAME' was added to the violation description.  RT #59268.
+    * RegularExpressions::ProhibitUnusedCapture now takes account of the
+      use of $- and $+ (and their English equivalents under 'use
+      English') provided the subscripts are literal integers.
+    * RegularExpressions::ProhibitUnusedCapture now takes account of the
+      use of capture variables in the replacement portion of
+      s/.../.../e.
+    * ValuesAndExpressions::RequireInterpolationOfMetachars now detects
+      and complains about "\b" and "\l" as documented in perlop, and
+      "\1" through "\7", which are not documented there, but were found
+      in toke.c.
+
+    Other Changes:
+    * Test::Perl::Critic::Policy no longer exports by default.
+    * Build phase now requires Test::Deep.
+    * Added example using Try::Tiny to documentation of
+      ErrorHandling::RequireCheckingReturnValueOfEval. Suggested by Andy
+      Lester on the developers mailing list.
+    * In order to get more consistent behavior across all installations of
+      Perl::Critic, IPC::Open2 (which actually is part of core), PPIx::Regexp,
+      Perl::Tidy, Pod::Spell, and Text::ParseWords are no longer optional
+      prerequisites.
+
+    Bug Fixes:
+    * Build.PL/Makefile.PL didn't specify a minimum version of version.pm, but
+      TestingAndDebugging::RequireUseStrict did.  RT #58952
+    * Perl::Critic::Annotation needs to look inside the __END__ statement to
+      find the true end of the document, otherwise POD policies may give false
+      positives.  RT #59176
+    * BuiltinFunctions::ProhibitStringyEval no longer dies on eval
+      "#...".  RT #60179
+    * RegularExpressions::ProhibitUnusedCapture now takes account of the
+      %LAST_PAREN_MATCH as well as %+ if English has been loaded.  RT #60002
+    * Subroutines::ProhibitManyArgs now interprets prototype groups (e.g.
+      \[$@%]) as representing a single argument.
+    * Require Exporter version 5.63 (versus version 0) to get sane handling of
+      export tags.  RT# 61071
+    * Prevent Subroutines::ProhibitUnusedPrivateSubroutines from failing
+      on &_subroutine().  RT #61311
+    * Subroutines::ProhibitAmpersandSigils now allows references of the
+    * form \( &sub1, &sub2 ).  RT #49609
+
+[1.109] Released on 2010-08-29
+
+    Bug Fixes:
+    * ValuesAndExpressions::RequireInterpolationOfMetachars fix due to changes
+      in Email::Address 1.890.  Note that this may find problems in code that
+      it didn't before, e.g. q<'@foo'>.
+
+[1.108] Released on 2010-06-22
+
+    This is the "Give Shawn Moore what we promised him a year ago and hurry up
+    and get this out before Brad Oaks gives his YAPC::NA talk" release.
+
+    New Policies:
+    * Documentation::RequirePodLinksIncludeText
+    * Subroutines::ProhibitUnusedPrivateSubroutines
+
+    New Features:
+    * There is a new global configuration item, 'program-extensions', which
+      configures Perl::Critic's idea of which file name extensions represent
+      programs.  The desired extensions are specified as a space-separated list,
+      with leading '.' on each if that is desired.  Files whose names end in
+      '.PL' will always be considered programs.  This can be overridden by
+      command option --programs-extensions, which can be specified multiple
+      times.
+    * There is now a perlcritic --allow-unsafe switch.  Without this switch,
+      Perl::Critic will silently refuse to load any Policy that is marked
+      unsafe.  Unsafe Policies are usually ones that may compile or execute
+      untrusted code (see Perl::Critic::DynamicPolicy for an example); Policy
+      authors can mark their policies as unsafe by overriding the is_safe()
+      method.
+    * The framework that we use to test Perl::Critic Policies has been
+      packaged into a convenient module that you can use to test your own
+      Policies.  See Test::Perl::Critic::Policy and Perl::Critic::TestUtils
+      for details.
+
+    Policy Changes
+    * BuiltInFunctions::ProhibitLvalueSubstr no longer complains when there
+      is a low-precedence operator between the substr() and the assignment
+      operator.
+    * CodeLayout::ProhibitParensWithBuiltins now allows 'state ($foo)'.  RT
+      #52029
+    * ErrorHandling::RequireCarping now has an
+      allow_in_main_if_not_in_subroutine option to allow "die" directly in
+      the default namespace.
+    * InputOutput::RequireBriefOpen now recognizes CORE::open(),
+      CORE::close(), CORE::GLOBAL::open(), and CORE::GLOBAL::close().  RT
+      #52391
+    * Modules::ProhibitEvilModules now complains by default about the modules
+      deprecated by the Perl 5 Porters in 5.12.
+    * Modules::RequireVersionVar documentation updated to make clear that "my
+      $VERSION" does not work as a module version declaration.  RT #56667
+    * The RegularExpressions::* policies have been converted from using
+      Regexp::Parser to using PPIx::Regexp for their heavy lifting.
+    * RegularExpressions::ProhibitCaptureWithoutTest now allows capture
+      variables inside when() {}.  RT #36081.
+    * RegularExpressions::ProhibitUnusedCapture now checks for unused named
+      captures.
+    * Subroutines::ProhibitManyArgs revised to count only characters in the
+      prototype that represent arguments.  RT #56627
+    * Subroutines::ProhibitNestedSubs no longer complains about scheduled
+      blocks (BEGIN, etc.) inside subroutines and vice versa.
+    * Subroutines::RequireFinalReturn should now understand a final given/when
+      statement, and declare an error if there is no 'default' block or if any
+      branch does not return.
+    * TestingAndDebugging::RequireUseStrict now accepts 'use 5.011' or greater
+      as equivalent to 'use strict'.
+    * ValuesAndExpressions::ProhibitMismatchedOperators false positive with
+      "'foo' x 15 . 'bar'".  RT #54524
+    * Variables::ProhibitPunctuationVars gave false positives on qr// regexp's
+      ending in '$'.  RT #55604
+
+    Bug Fixes:
+    * The "## no critic" annotations now respect #line directives.
+    * Annotations on statements spanning more than one line (e.g.
+            my $foo =
+                '$bar'; ## no critic (RequireInterpolationOfMetachars)
+      ) are now handled as single-line annotations, not block annotations.
+    * All instances of L<Foo> in the POD have been changed to L<Foo|Foo>.
+      L</bar> and L<Foo/bar> were allowed to stand.  RT #37485
+    * Spaces are now allowed immediately inside the enclosing parentheses in
+      "## no critic ( Foo )".  RT #52038
+    * With the introduction of PPIx::Regexp, Perl::Critic no longer dies
+      when it encounters a Perl 5.010 regexp.  RT #49442.
+    * DEVELOPER.pod typo in link to
+      ValuesAndExpressions::ProhibitConstantPragma policy. RT #57818
+    * Spelling errors in documentation.  RT #57375
+    * "die" used instead of "croak".  RT #56619
+    * Fixed regex test that caused test failures on every Perl 5.11
+      (credit Tom Wyant).
+    * t/20_policy_pod_spelling.t now works (or at least no longer fails)
+      in non-English locales (again).  RT #43291 and RT #48986.
+    * Perldoc hae broken link for McCabe score definition.  RT #53219
+    * RT #33935 and #49679 were fixed by upgrading to PPI 1.208
+
+    Other Changes:
+    * Perl::Critic::Utils::is_unchecked_call() updated to include chmod in the
+      set of things covered by autodie (this happened in autodie v2.08).  The
+      primary effect of this is on InputOutput::RequireCheckedSyscalls.
+    * Now depends upon Task::Weaken to ensure that we only install with perls
+      where Scalar::Util::weaken() works.
+    * Email::Address was optional, but is now required.  So everyone
+      gets the optimal behavior from RequireInterpolationOfMetachars.
+    * Some infrastructure has been extracted to the new PPIx-Utilities
+      distro.  It is also a required dependency here.  Over time a good
+      portion of Perl::Critic::Utils* will be migrated to this distribution.
+    * Perl::Critic::Utils::PPI::get_constant_name_element_from_declaring_statement()
+      is deprecated because it doesn't handle multiple constants being
+      declared within a single "use constant" statement.  Use
+      PPIx::Utilities::Statement::get_constant_name_elements_from_declaring_statement()
+      instead.
+    * Removed all uses of Perl::Critic::Utils::PPIRegep.  Since the
+      PPIx::Regexp update, Perl::Critic only used get_match_string() and
+      friends, which were superseded by the corresponding PPI methods.
+      Perl::Critic now depends on PPI-1.208 or newer.
+    * Moved Perl::Critic::Utils::PPIRegexp to the Perl-Critic-Deprecated.
+    * The PolicySummary.pod file is now generated when the distribution
+      is created, rather than when you install it.  This ensures the file
+      will be available on http://search.cpan.org.  Thanks to Bear Longyear
+      for bringing this to our attention.
+
+[1.107_001] Released on 2010-06-20
+
+    Changes summarized into 1.108 above.  For exact details, see Changes on
+    BackPAN.
+
+[1.106] Released on 2010-05-10
+
+    Bug Fixes:
+    * NamingConventions::Capitalization fix for PPI 1.212.  RT #57348
+
+[1.105_03] Released on 2010-03-21
+[1.105_02] Released on 2010-01-23
+[1.105_01] Released on 2010-01-16
+
+    Changes summarized into 1.108 above.  For exact details, see Changes on
+    BackPAN.
+
+[1.105] Released on 2009-09-07
+
+    Bug Fixes:
+    * Variables::ProhibitPunctuationVars would complain about "%-" appearing
+      anywhere in a string.  RT #49016
+
+    Policy Changes:
+    * InputOutput::RequireCheckedSyscalls now complains about unchecked "say"
+      by default.  RT #37487
+
+[1.104] Released on 2009-08-23
+
+    This release is dedicated to Tom Wyant in appreciation of the amount of
+    effort he put into the enhancements and bug fixes in this release, for
+    having the patience to wait for the amount of time that it took to get
+    them out, and for overall awesomeness.  Thank you, Tom.
+
+    New Policies:
+      Objects::ProhibitIndirectSyntax
+      ValuesAndExpressions::ProhibitComplexVersion
+      ValuesAndExpressions::RequireConstantVersion
+
+    New Optional Requirement:
+    * Email::Address, if you want
+      ValuesAndExpressions::ProhibitInterpolationOfLiterals to properly ignore
+      email addresses.
+
+    New Features:
+    * Perlcritic will list the names of files with violations if given the
+      --files-with-violations option, or the names of files without
+      violations if given the --files-without-violations options. These
+      have synonyms -l and -L respectively.
+    * Perlcritic has a new --list-enabled option, which lists the Policies
+      that will be enforced, given the current configuration.  This is
+      useful if you've written a complex command-line or modified your
+      .perlcriticrc file and you want to see which Policies *would*
+      be used with the current configuration, if you were actually going
+      to critque a file with it.
+    * Perl::Critic::Violation now takes #line directives into account in the
+      %F, %f, and %l formats.  You can get the old values via the new %G, %g,
+      and %L formats.
+
+    Policy Changes:
+    * CodeLayout::ProhibitParensWithBuiltins was complaining in certain cases
+      where parentheses are required due to operator precedence.  RT #46862.
+    * ControlStructures::ProhibitMutatingListFunctions no longer complains
+      about uses of tr/// that don't modify the operand.  Reported by EDAVIS,
+      RT #44515.
+    * Miscellanea::RequireRcsKeywords now accepts "qw$Keyword: ...$".  RT
+      #45196.
+    * Modules::RequireFilenameMatchesPackage now respects logical filenames
+      defined by the "#line" directives.  This allows the Policy to work
+      properly with IDEs and code generators.
+    * NamingConventions::Capitalization now allows fully qualified subroutine
+      declarations ( e.g. "sub Foo::Bar::baz {...}" ).  However, the
+      non-package part of the subroutine name must still conform to whatever
+      capitalization rule you have chosen.
+    * RegularExpressions::ProhibitCaptureWithoutTest no longer complains if
+      the regex is followed by an "or die" or similar.  Reported by EDAVIS,
+      RT #36081.
+    * RegularExpressions::ProhibitComplexRegexes no longer counts variable
+      substitutions in the length.   Reported by EDAVIS, RT #36098.
+    * RegularExpressions::ProhibitUnusedCapture now considers the body of
+      while loops and not just their condition.  Reported by EDAVIS, RT
+      #38942.
+    * ValuesAndExpressions::ProhibitVersionStrings was getting confused by
+      comments.  Reported by Kevin Ryde,  RT #44986.
+    * ValuesAndExpressions::RequireInterpolationOfMetachars now allows sigils
+      in the arguments to "use vars".  Contributed by Kevin Ryde, RT #47318.
+    * ValuesAndExpressions::RequireInterpolationOfMetachars now properly
+      ignores email addesses, if you have Email::Address installed.  Inspired
+      by the Kevin Ryde contribution in RT #47318.
+    * Variables::ProhibitPunctuationVars gained the ability to look inside
+      interpolated strings.  Doing this correctly is challenging and things
+      may not work out right; how the policy does this can be controlled via
+      the new "string_mode" option.  Contributed by Edgar Whipple
+      <perlmonk at misterwhipple dot com>.
+    * Variables::ProhibitPunctuationVars now ignores $] by default since there
+      is no English.pm equivalent.
+
+    Other Bug Fixes:
+    * Perl::Critic::Utils::parse_arg_list() was slurping up the "or die ..."
+      portion of "open my $foo, 'somefile' or die ...", causing
+      InputOutput::ProhibitTwoArgOpen to not complain about this example.
+      Reported by Alexandr Ciornii,  RT #44554.
+
+    Minor Changes
+    * The line count emitted by the --statistics option is further broken down
+      by line content.
+
+    Minor Documentation Fixes:
+    * ValuesAndExpressions::ProhibitInterpolationOfLiterals.  Reported by
+      Debian in http://bugs.debian.org/542814,  RT #48936
+
+    Build Fixes:
+    * There wasn't a specific version given for the List::MoreUtils dependency
+      and we're using features that weren't avialable until 0.19.  So, we now
+      require version 0.19.  Noticed by John J. Trammell,  RT #48917.
+    * Some tests were tied to the specific "true" and "false" values that some
+      functions were returning.  Reported by Michael Schwern,  RT #43910.
+
+    Other News:
+    * Komodo version 5.1.1 now has built-in support for Perl-Critic,
+      if you have the Perl::Critic and criticism modules installed.
+      Both should be available through the ActiveState Perl Package
+      Manager ppm(1).
+
+[1.103] Released on 2009-08-03
+
+    Fix configure_requires prerequisite on Module::Build 0.34_02.
+
+[1.102] Released on 2009-08-03
+
+    Bug fixes:
+    * Works with PPI 1.205.  Yay for 5.10 support!
+    * Variables::RequireLexicalLoopIterators didn't work correctly on foreach
+      loops with labels.
+
+[1.101_003] Released on 2009-07-22
+[1.101_002] Released on 2009-07-21
+[1.101_001] Released on 2009-07-21
+
+    Changes summarized into 1.102 above.  For exact details, see Changes on
+    BackPAN.
+
+[1.100] Released on 2009-07-17
+
+    This is a POD fix release to deal with issues identified by Test::POD
+    1.40.  There is no functional difference between this release and 1.098.
+    This is the last release of Perl::Critic that will be compatible with PPI
+    1.203.  PPI's parsing of for(each)? loops is changing in its next release
+    in an incompatible manner and there will be a release in the near future
+    to make Perl::Critic compatible with that change.
+
+[1.099_002] Released on 2009-06-27
+[1.099_001] Released on 2009-06-25
+
+    Experimental releases.  For exact details, see Changes on BackPAN.
+
+[1.098] Released on 2009-03-07
+
+    Some Exciting News:
+    The Perl Development Kit (PDK 8.0) from ActiveState now includes a
+    very slick graphical interface to Perl-Critic.  I highly recommend
+    that you check it out.  Here's a link to screenshots and docs:
+
+    http://docs.activestate.com/pdk/8.0/PerlCritic_gui.html
 
     New Features:
     * Violation coloring is now configurable via command line or profile. The
@@ -10,21 +366,21 @@
       the profile_strictness. The default is to warn about them. The previous
       default was that they were fatal.
     * -p is now a synonym for --profile.
-
-    New Policies:
-    * BuiltinFunctions::ProhibitExitInSubroutines
-    * Subroutines::ProhibitPassingCaptureVariable
+    * The --verbose option for perlcritic now supports a %C format that will
+      displays the class of PPI::Element that caused the violation.
 
     Policy Changes:
     * ControlStructures::ProhibitNegativeExpressionsInUnlessAndUntilConditions
       didn't include "pbp" in its default themes even though it is derived
       from the book.  Now it does.  :]
     * ErrorHandling::RequireCarping now allows a here document as the last
-      element if allow_messages_ending_with_newlines is true.
+      element if the "allow_messages_ending_with_newlines" option is true.
     * Fix Subroutines::ProhibitAmpersandSigils so it allows "defined(&x)" as
       well as "defined &x".  Patch from Kevin Ryde, RT #38855.
     * Subroutines::ProtectPrivateSubs now has an "allow" option to specify
       subroutines which are exempt from this policy.  RT #38678.
+      Additionally, a "private_name_regex" option has been added that allows
+      you to specify what a private subrouting name looks like.
     * Subroutines::RequireArgUnpacking now has an "allow_subscripts" option
       to allow array slices and elements.  RT #34009.
     * Subroutines::RequireArgUnpacking now has an "allow_delegation_to" option
@@ -52,6 +408,13 @@
       can invoke Perl::Critic::Command::run() to get the equivalent of running
       the command.  (Note, however, this interface WILL change, so don't count
       on the current one.)
+    * Modules have had a "INTERFACE SUPPORT" section added which states
+      whether the Perl::Critic developers consider the particular module is
+      public or not.  Any removal of functionality from a public module will
+      go through a deprecation cycle.  Non-public modules may have their
+      interfaces changed without notice.
+    * P::C::Policy now has an is_enabled() method.
+    * P::C::Violation now has an element_class() method.
 
     Bug Fixes:
     * CodeLayout::ProhibitTrailingWhitespace didn't notice cases where PPI
@@ -63,6 +426,15 @@
       $_ being an array reference.  RT #39601.
     * Variables::RequireLocalizedPunctuationVars now applies to subscripted
       names.  RT #29384.
+
+    Internals:
+    * The guts of Build.PL and Makefile.PL have been rearranged.
+
+[1.097_002] Released on 2009-03-01
+[1.097_001] Released on 2009-03-01
+
+    Changes summarized into 1.098 above.  For exact details, see Changes on
+    BackPAN.
 
 [1.096] Released on 2009-02-01
 

@@ -165,13 +165,90 @@ sub baz  { quit }
 
 ## name ForLoop is a QuoteLike::Words
 ## failures 0
-## TODO PPI misparses the for loop.
 ## cut
 
 sub foo {
     for my $thingy qw<blah> {}
 
     return;
+}
+
+#-----------------------------------------------------------------------------
+
+## name RT 43309 - given/when followed by return
+## failures 0
+## cut
+
+sub foo {
+    given ($bar) {}
+    return;
+}
+
+#-----------------------------------------------------------------------------
+
+## name given/when with return on all branches
+## failures 0
+## cut
+
+sub foo {
+    my ( $val ) = @_;
+    given ( $val ) {
+        when ( 'end' ) {
+            return 'End.';
+        }
+        default {
+            return 'Not end.';
+        }
+    }
+}
+
+#-----------------------------------------------------------------------------
+
+## name given/suffix when with return on all branches
+## failures 0
+## cut
+
+sub foo {
+    my ( $val ) = @_;
+    given ( $val ) {
+        return 'End.' when 'end';
+        default {
+            return 'Not end.';
+        }
+    }
+}
+
+#-----------------------------------------------------------------------------
+
+## name given/when without return on all branches fails
+## failures 1
+## cut
+
+sub foo {
+    my ( $val ) = @_;
+    given ( $val ) {
+        when ( 'end' ) {
+            return 'End.';
+        }
+        default {
+            print "Not end.\n";
+        }
+    }
+}
+
+#-----------------------------------------------------------------------------
+
+## name given/when with return on all branches but without default fails
+## failures 1
+## cut
+
+sub foo {
+    my ( $val ) = @_;
+    given ( $val ) {
+        when ( 'end' ) {
+            return 'End.';
+        }
+    }
 }
 
 ##############################################################################

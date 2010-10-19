@@ -13,7 +13,7 @@ use warnings;
 
 use base 'Exporter';
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -60,7 +60,13 @@ Perl::Critic::Utils::Perl - Utility functions for dealing with Perl language iss
 =head1 DESCRIPTION
 
 This handles various issues with Perl, the language, that aren't necessarily
-L<PPI> related.
+L<PPI|PPI> related.
+
+
+=head1 INTERFACE SUPPORT
+
+This is considered to be a public module.  Any changes to its
+interface will go through a deprecation cycle.
 
 
 =head1 IMPORTABLE SUBROUTINES
@@ -70,7 +76,7 @@ L<PPI> related.
 =item C<symbol_without_sigil( $symbol )>
 
 Returns the name of the specified symbol with any sigil at the front.
-The parameter can be a vanilla Perl string or a L<PPI::Element>.
+The parameter can be a vanilla Perl string or a L<PPI::Element|PPI::Element>.
 
 
 =back
@@ -83,7 +89,7 @@ Elliot Shank <perl@galumph.com>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2007-2009 Elliot Shank.  All rights reserved.
+Copyright (c) 2007-2010 Elliot Shank.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

@@ -70,14 +70,6 @@ and parse it out in the code, something along the lines of
 and so on.
 
 
-=item * Add --files-with-violations/-l and --files-without-violations/-L options to F<perlcritic>.
-
-Just print out file names.  I could have used this at work when combined with
-C<--single-policy>.
-
-    gvim `perlcritic --single-policy QuotedWordLists -l`
-
-
 =item * Add a file Parameter::Behavior.
 
 
@@ -127,11 +119,30 @@ come out, we need to change the line and file reported by Violations.
 
 - Data section count
 
+Proposed implementation committed 15-Mar-2007 by wyant, about revision 3240.
+
 
 =item * Detect 5.10 source and enable stuff for that.
 
 For example, treat C<say> as equivalent to C<print>.
 
+=item * Detect 5.12 source and enable stuff for that.
+
+Yes, this is long-term, and is really a list of stuff from 5.011 to enable if
+it makes it into 5.12, gleaned from the perl511xdelta files:
+
+'use 5.011;' implies 'use strict;' and 'use feature qw{ :5.11 };' per
+perl5110delta.
+
+'sub foo { ... }' (yes, with the subroutine body being an elipsis a.k.a. the
+'yada yada' operator) compiles but fails at runtime per perl5110delta. PPI
+seems to parse this sanely as of 1.206.
+
+'package Foo 1.23;' is equivalent to 'package Foo; our $VERSION = 1.23;' per
+perl5111delta. PPI seems to parse this sanely as of 1.206.
+
+Nothing additional found in perl5112delta, which is the most recent as of the
+addition of this item.
 
 =item * Support a means of failing if a Policy isn't installed.
 
@@ -183,99 +194,19 @@ Why can't I do this:
 Use L<Win32::Console::ANSI> like L<App::Ack>.
 
 
-=item * A function that splits up a PPI::Node's descendants based upon package.
+=item * Create P::C::Node and make P::C::Document a subclass and make use of PPIx::Utilities::Node::split_ppi_node_by_namespace() to provide per-namespace caching of lookups that are now on P::C::Document.
 
 This is necessary to get P::C::Moose Policies correct.
 
-Say we've got the following code:
 
-    #!perl
+=item * Use L<version|version> to declare C<$VERSION> numbers throughout P::C
 
-    my $x = blah();
-
-    package Foo;
-
-    my $y = blah_blah();
-
-    {
-        say 'Whee!';
-
-        package Bar;
-
-        something();
-    }
-
-    thingy();
-
-    package Baz;
-
-    da_da_da();
-
-    package Foo;
-
-    foreach ( blrfl() ) {
-        ...
-    }
-
-Calling the function on a PPI::Document for the above should return a hash of
-arrays of PPI::Nodes.  The result should look something like this, using
-multi-line string literals (RestrictLongStrings violations!) for the actual
-code parts instead of PPI trees to make this easier to read.
-
-    (
-        main    => [
-            q<
-                #!perl
-
-                my $x = blah();
-            >,
-        ],
-        Foo     => [
-            q<
-                package Foo;
-
-                my $y = blah_blah();
-
-                {
-                    say 'Whee!';
-
-                }
-
-                thingy();
-            >,
-            q<
-                package Foo;
-
-                foreach ( blrfl() ) {
-                    ...
-                }
-            >,
-        ],
-        Bar     => [
-            q<
-                package Bar;
-
-                something();
-            >,
-        ],
-        Baz     => [
-            q<
-                package Baz;
-
-                da_da_da();
-            >,
-        ],
-    )
-
-
-=item * Use L<version> to declare C<$VERSION> numbers throughout P::C
-
-PBP recommends using the L<version> module.  I chose not to follow that
-recommendation because L<version> didn't work with the Perl v5.6.1 that I had
+PBP recommends using the L<version|version> module.  I chose not to follow that
+recommendation because L<version|version> didn't work with the Perl v5.6.1 that I had
 at $work at that time (and I really wanted to use Perl::Critic at work).
-But now the L<version> has been updated and those bugs may have been fixed,
+But now the L<version|version> has been updated and those bugs may have been fixed,
 or perhaps we just don't care about running on Perl v5.6.1 any more.  So
-maybe now we can go ahead and use L<version>.
+maybe now we can go ahead and use L<version|version>.
 
 =back
 
@@ -309,13 +240,6 @@ Look for use of the bad methods in Hash::Util.
 =item * Objects::ProhibitLValueAccessors [346-349]
 
 Look for the C<:lvalue> subroutine attribute.
-
-
-=item * Objects::ProhibitIndirectSyntax [349-351]
-
-While the general situation can't be handled, we can look for a configured set
-of names.  Especially should be able to complain about C<new Foo()> by
-default.
 
 
 =back
@@ -396,6 +320,12 @@ Anything that is a program should have a shebang line.  This includes .t
 files.
 
 
+=item * Modules::RequirePackageDeclarationAsFirstStatementInModule
+
+See L<http://blog.woobling.org/2009/11/scoping-of-current-package.html>.
+Ouch.
+
+
 =item * BuiltInFunctions::RequireConstantSprintfFormat
 
 
@@ -462,14 +392,6 @@ Good: C<< Foo::Bar->new >>, Bad: C<< new Foo::Bar >>
 =item * RegularExpressions::ProhibitSWSWSW
 
 Require C<split> instead of C<m/\s*\w*\s*\w*\s*/>.  From MJD's Red Flags.
-
-
-=item * VariablesAndExpressions::RequireConstantVersion (low severity)
-
-
-=item * VariablesAndExpressions::ProhibitComplexVersion (medium severity)
-
-L<http://rt.cpan.org/Ticket/Display.html?id=20439>
 
 
 =item * Documentation::RequireSynopsis
@@ -547,6 +469,11 @@ which is better written as
 
 for performance gains and compile-time syntax checking.
 
+Question: This is very similar to BuiltInFunctions::ProhibitStringyEval. What
+does the new policy buy us? Could we get the same thing with an option on the
+latter to forbid un-interpolated includes even if C<allow_includes> is turned
+on?
+
 
 =item * RegularExpressions::ProhibitUnnecessaryEscapes
 
@@ -617,11 +544,6 @@ See https://rt.cpan.org/Ticket/Display.html?id=38074.
 The opposite side of ErrorHandling::RequireCheckingReturnValueOfEval.
 
 
-=item * Documentation::RequirePODLinksIncludeText
-
-The whole problem with "on the Foo manpage" being fixed by LE<lt>Foo|FooE<gt>.
-
-
 =back
 
 
@@ -629,17 +551,25 @@ The whole problem with "on the Foo manpage" being fixed by LE<lt>Foo|FooE<gt>.
 
 =over
 
-=item * Refactor guts of F<perlcritic> into L<Perl::Critic::CLI>
+=item * Reformat all the POD to use 78 columns instead of 70.
 
-So the F<perlcritic> script would basically just say...
+This thing of having different widths for the documentation and the code is
+rediculous.  Don't do this until after the next non-dev release.  Elliot is
+considering doing a special release only including this change so that the
+search.cpan.org diff tool doesn't entirely break.
 
-  use Perl::Critic::CLI;
-  exit Perl::Critic::CLI->run(@ARGV);
 
-This would make the stuff that is currently inside F<perlcritic>
-easier to test.  Also would open the door for developers to
-subclass and extend F<perlcritic>, if they had some reason
-to do so.  Also, just because it feels like the right thing to do.
+=item * Eliminate use of IO::String
+
+I'm pretty sure that opening references to scalars is in 5.6, so IO::String
+isn't necessary.
+
+
+=item * Give L<Perl::Critic::Command> a proper API.
+
+Now that we've got the guts of L<perlcritic> in there, we should make the
+it available to users.
+
 
 =item * Create constants for the PPI location array elements.
 
@@ -691,9 +621,6 @@ Question: Why?
 
 Answer: Readability, mostly.  Performance, maybe.
 
-=item * Refactor guts of perlcritic into a module (Perl::Critic::App ??)
-
-Because it is getting unwieldy in there.
 
 =back
 
@@ -708,6 +635,7 @@ We're waiting on the following bugs to get fixed in a CPAN release of PPI:
 
 Exists in svn.  Replace _descendant_of() in RequireCheckingReturnValueOfEval
 with that, once it is released, because it's faster and native.
+
 
 =item Newlines
 

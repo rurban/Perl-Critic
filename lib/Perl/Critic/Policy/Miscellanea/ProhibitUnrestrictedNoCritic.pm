@@ -1,8 +1,8 @@
 ##############################################################################
-#      $URL: http://perlcritic.tigris.org/svn/perlcritic/trunk/Perl-Critic/lib/Perl/Critic/Policy/Miscellanea/ProhibitFormats.pm $
-#     $Date: 2008-09-07 03:33:32 -0700 (Sun, 07 Sep 2008) $
-#   $Author: clonezone $
-# $Revision: 2730 $
+#      $URL$
+#     $Date$
+#   $Author$
+# $Revision$
 ##############################################################################
 
 package Perl::Critic::Policy::Miscellanea::ProhibitUnrestrictedNoCritic;
@@ -15,7 +15,7 @@ use Readonly;
 use Perl::Critic::Utils qw<:severities :booleans>;
 use base 'Perl::Critic::Policy';
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -120,12 +120,12 @@ This Policy is not configurable except for the standard options.
 
 =head1 AUTHOR
 
-Jeffrey Ryan Thalhammer <thaljef@cpan.org>
+Jeffrey Ryan Thalhammer <jeff@imaginative-software.com>
 
 
 =head1 COPYRIGHT
 
-Copyright (c) 2008-2009 Jeffrey Ryan Thalhammer.  All rights reserved.
+Copyright (c) 2008-2010 Imaginative Software Systems.  All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

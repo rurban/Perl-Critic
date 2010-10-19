@@ -15,30 +15,42 @@ use Carp qw< carp >;
 
 use version;
 
+
+use Perl::Critic::Document qw< >;
+use Perl::Critic::Utils qw< $EMPTY >;
 use Perl::Critic::Utils::DataConversion qw< dor >;
 
-use Test::More tests => 27;
+
+use Test::Deep;
+use Test::More tests => 43;
 
 #-----------------------------------------------------------------------------
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
-use_ok('Perl::Critic::Document');
 can_ok('Perl::Critic::Document', 'new');
 can_ok('Perl::Critic::Document', 'filename');
 can_ok('Perl::Critic::Document', 'find');
 can_ok('Perl::Critic::Document', 'find_first');
 can_ok('Perl::Critic::Document', 'find_any');
+can_ok('Perl::Critic::Document', 'namespaces');
+can_ok('Perl::Critic::Document', 'subdocuments_for_namespace');
 can_ok('Perl::Critic::Document', 'highest_explicit_perl_version');
+can_ok('Perl::Critic::Document', 'uses_module');
 can_ok('Perl::Critic::Document', 'ppi_document');
+can_ok('Perl::Critic::Document', 'is_program');
+can_ok('Perl::Critic::Document', 'is_module');
 
 {
     my $code = q{'print 'Hello World';};  #Has 6 PPI::Element
     my $ppi_doc = PPI::Document->new( \$code );
-    my $pc_doc  = Perl::Critic::Document->new( $ppi_doc );
+    my $pc_doc  = Perl::Critic::Document->new( '-source' => $ppi_doc );
     isa_ok($pc_doc, 'Perl::Critic::Document');
+    isa_ok($pc_doc, 'PPI::Document');
+    isa_ok($pc_doc, 'PPI::Node');
+    isa_ok($pc_doc, 'PPI::Element');
 
 
     my $nodes_ref = $pc_doc->find('PPI::Element');
@@ -89,9 +101,56 @@ can_ok('Perl::Critic::Document', 'ppi_document');
         is( $found, undef, 'find_any by empty class name');
 
     }
+
+    #-------------------------------------------------------------------------
+
+    cmp_deeply(
+        [ $pc_doc->namespaces() ],
+        ['main'],
+        q<everything is in the "main" namespace>,
+    );
+
+    ok( $pc_doc->is_module(), q{document type 'module' is a module});
+    ok( ! $pc_doc->is_program(), q{document type 'module' is not a program});
+
 }
 
 #-----------------------------------------------------------------------------
+
+{
+    my $ppi_document = PPI::Document->new(\'foo(); package Foo; package Bar');
+    my $critic_document =
+        Perl::Critic::Document->new(-source => $ppi_document);
+
+    cmp_deeply(
+        [ $critic_document->namespaces() ],
+        bag( qw< main Foo Bar > ),
+        'Got expected namespaces',
+    );
+}
+
+#-----------------------------------------------------------------------------
+
+{
+    my $ppi_document = PPI::Document->new(\'use Moose');
+    my $critic_document =
+        Perl::Critic::Document->new(-source => $ppi_document);
+
+    ok(!! $critic_document->uses_module('Moose'),       'Moose is used.');
+    ok( ! $critic_document->uses_module('Moose::Role'), 'Moose::Role is not used.');
+
+    $ppi_document = PPI::Document->new( \q{ } );
+    $critic_document =
+        Perl::Critic::Document->new(-source => $ppi_document);
+
+    ok(
+        ! $critic_document->uses_module('Blah'),
+        q<uses_module() doesn't barf when there are no include statements.>,
+    );
+}
+
+#-----------------------------------------------------------------------------
+
 
 {
     test_version( 'sub { 1 }', undef );
@@ -112,7 +171,7 @@ sub test_version {
 
     my $document =
         Perl::Critic::Document->new(
-            PPI::Document->new( \$code )
+            '-source' => PPI::Document->new( \$code )
         );
 
     is(
@@ -126,7 +185,16 @@ sub test_version {
 
 #-----------------------------------------------------------------------------
 
-# ensure we run true if this test is loaded by
+my $nameless_code = 'use strict';
+my $nameless_doc = Perl::Critic::Document->new( -source => \$nameless_code,
+                                                '-forced-filename' => 'Build.PL' );
+
+is($nameless_doc->filename(), 'Build.PL', 'Got forced filename');
+is($nameless_doc->is_module(), 0, 'Forced name affects module determination');
+
+#-----------------------------------------------------------------------------
+
+# ensure we return true if this test is loaded by
 # t/08_document.t_without_optional_dependencies.t
 1;
 

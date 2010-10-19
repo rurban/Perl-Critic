@@ -17,7 +17,7 @@ use Perl::Critic::Utils qw{ :booleans :characters :severities :data_conversion }
 
 use base 'Perl::Critic::Policy';
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #----------------------------------------------------------------------------
 
@@ -35,8 +35,6 @@ Readonly::Scalar my $UNSIGNED_NUMBER =>
     }xms;
 Readonly::Scalar my $SIGNED_NUMBER => qr/ [-+]? $UNSIGNED_NUMBER /xms;
 
-# The regex is already simplified.  There's just a lot of variable use.
-## no critic (ProhibitComplexRegexes)
 Readonly::Scalar my $RANGE =>
     qr{
         \A
@@ -50,7 +48,6 @@ Readonly::Scalar my $RANGE =>
         )?
         \z
     }xms;
-## use critic
 
 Readonly::Scalar my $SPECIAL_ARRAY_SUBSCRIPT_EXEMPTION => -1;
 
@@ -373,14 +370,14 @@ sub _element_is_in_a_constant_subroutine {
     my $following = $elem->snext_sibling();
     if ($following) {
         return 0 if not $following->isa('PPI::Token::Structure');
-        return 0 if not $following->content() eq $SCOLON;
+        return 0 if $following->content() ne $SCOLON;
         return 0 if $following->snext_sibling();
     }
 
     my $preceding = $elem->sprevious_sibling();
     if ($preceding) {
         return 0 if not $preceding->isa('PPI::Token::Word');
-        return 0 if not $preceding->content() eq 'return';
+        return 0 if $preceding->content() ne 'return';
         return 0 if $preceding->sprevious_sibling();
     }
 
@@ -625,7 +622,7 @@ Elliot Shank C<< <perl@galumph.com> >>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2006-2009 Elliot Shank.  All rights reserved.
+Copyright (c) 2006-2010 Elliot Shank.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

@@ -16,7 +16,7 @@ use Readonly;
 use Perl::Critic::Utils qw{ :severities hashify };
 use base 'Perl::Critic::Policy';
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 Readonly::Hash my %SPECIAL_BLOCK_NAMES =>
     hashify( qw< BEGIN END INIT CHECK UNITCHECK > );
@@ -92,8 +92,8 @@ This Policy is not configurable except for the standard options.
 
 =head1 SEE ALSO
 
-L<Perl Buzz article|http://perlbuzz.com/2008/05/colons-invalidate-your-begin-and-end-blocks.html>
-on this issue.
+The Perl Buzz article on this issue at
+L<http://perlbuzz.com/2008/05/colons-invalidate-your-begin-and-end-blocks.html>.
 
 
 =head1 ACKNOWLEDGMENT
@@ -108,7 +108,7 @@ Mike O'Regan
 
 =head1 COPYRIGHT
 
-Copyright (c) 2008-2009 Mike O'Regan.  All rights reserved.
+Copyright (c) 2008-2010 Mike O'Regan.  All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

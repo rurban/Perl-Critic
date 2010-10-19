@@ -27,7 +27,7 @@ use Perl::Critic::Utils::PPI qw< is_ppi_expression_or_generic_statement >;
 
 use base 'Exporter';
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 # Exportable symbols here.
@@ -280,6 +280,7 @@ Readonly::Hash my %PRECEDENCE_OF => (
     'eq'   => 11,
     'ne'   => 11,
     'cmp'  => 11,
+    '~~'   => 11,
     '&'    => 12,
     '|'    => 13,
     '^'    => 13,
@@ -315,6 +316,10 @@ Readonly::Hash my %PRECEDENCE_OF => (
 );
 
 ## use critic
+
+Readonly::Scalar my $MIN_PRECEDENCE_TO_TERMINATE_PARENLESS_ARG_LIST =>
+    precedence_of( 'not' );
+
 #-----------------------------------------------------------------------------
 
 sub hashify {  ## no critic (ArgUnpacking)
@@ -376,9 +381,13 @@ sub is_perl_bareword {
 #-----------------------------------------------------------------------------
 
 sub _build_globals_without_sigils {
-    my @globals = map { substr $_, 1 }  @B::Keywords::Arrays,
-                                        @B::Keywords::Hashes,
-                                        @B::Keywords::Scalars;
+    # B::Keywords as of 1.08 forgot $\
+    my @globals =
+        map { substr $_, 1 }
+            @B::Keywords::Arrays,
+            @B::Keywords::Hashes,
+            @B::Keywords::Scalars,
+            '$\\'; ## no critic (RequireInterpolationOfMetachars)
 
     # Not all of these have sigils
     foreach my $filehandle (@B::Keywords::Filehandles) {
@@ -837,6 +846,14 @@ sub is_function_call {
 sub is_script {
     my $doc = shift;
 
+    warnings::warnif(
+        'deprecated',
+        'Perl::Critic::Utils::is_script($doc) deprecated, use $doc->is_program() instead.',  ## no critic (ValuesAndExpressions::RequireInterpolationOfMetachars)
+    );
+
+    return $doc->is_program()
+        if blessed($doc) && $doc->isa('Perl::Critic::Document');
+
     return 1 if shebang_line($doc);
     return 1 if _is_PL_file($doc);
     return 0;
@@ -863,7 +880,7 @@ sub is_in_void_context {
     my $parent = $token->statement()->parent();
     if ($parent) {
         return if $parent->isa('PPI::Structure::List');
-        return if $parent->isa('PPI::Structure::ForLoop');
+        return if $parent->isa('PPI::Structure::For');
         return if $parent->isa('PPI::Structure::Condition');
         return if $parent->isa('PPI::Structure::Constructor');
 
@@ -950,6 +967,9 @@ sub parse_arg_list {
 
         while ($iter = $iter->snext_sibling() ) {
             last if $iter->isa('PPI::Token::Structure') and $iter eq $SCOLON;
+            last if $iter->isa('PPI::Token::Operator')
+                and $MIN_PRECEDENCE_TO_TERMINATE_PARENLESS_ARG_LIST <=
+                    precedence_of( $iter );
             push @arg_list, $iter;
         }
         return split_nodes_on_comma( @arg_list );
@@ -1204,18 +1224,19 @@ sub is_unchecked_call {
     return 1;
 }
 
-# Based upon autodie 1.994.
+# Based upon autodie 2.10.
 Readonly::Hash my %AUTODIE_PARAMETER_TO_AFFECTED_BUILTINS_MAP => (
     # Map builtins to themselves.
     (
         map { $_ => { hashify( $_ ) } }
             qw<
-                accept bind binmode chdir close closedir connect dbmclose
-                dbmopen exec fcntl fileno flock fork getsockopt ioctl link
-                listen mkdir msgctl msgget msgrcv msgsnd open opendir pipe
-                read readlink recv rename rmdir seek semctl semget semop send
-                setsockopt shmctl shmget shmread shutdown socketpair symlink
-                sysopen sysread sysseek system syswrite truncate umask unlink
+                accept bind binmode chdir chmod close closedir connect
+                dbmclose dbmopen exec fcntl fileno flock fork getsockopt ioctl
+                link listen mkdir msgctl msgget msgrcv msgsnd open opendir
+                pipe read readlink recv rename rmdir seek semctl semget semop
+                send setsockopt shmctl shmget shmread shutdown socketpair
+                symlink sysopen sysread sysseek system syswrite truncate umask
+                unlink
             >
     ),
 
@@ -1229,7 +1250,8 @@ Readonly::Hash my %AUTODIE_PARAMETER_TO_AFFECTED_BUILTINS_MAP => (
     ':file'     => {
         hashify(
             qw<
-                binmode close fcntl fileno flock ioctl open sysopen truncate
+                binmode chmod close fcntl fileno flock ioctl open sysopen
+                truncate
             >
         )
     },
@@ -1260,22 +1282,22 @@ Readonly::Hash my %AUTODIE_PARAMETER_TO_AFFECTED_BUILTINS_MAP => (
     ':io'       => {
         hashify(
             qw<
-                accept bind binmode chdir close closedir connect dbmclose
-                dbmopen fcntl fileno flock getsockopt ioctl link listen mkdir
-                msgctl msgget msgrcv msgsnd open opendir pipe read readlink
-                recv rename rmdir seek semctl semget semop send setsockopt
-                shmctl shmget shmread shutdown socketpair symlink sysopen
-                sysread sysseek syswrite truncate umask unlink
+                accept bind binmode chdir chmod close closedir connect
+                dbmclose dbmopen fcntl fileno flock getsockopt ioctl link
+                listen mkdir msgctl msgget msgrcv msgsnd open opendir pipe
+                read readlink recv rename rmdir seek semctl semget semop send
+                setsockopt shmctl shmget shmread shutdown socketpair symlink
+                sysopen sysread sysseek syswrite truncate umask unlink
             >
         )
     },
     ':default'      => {
         hashify(
             qw<
-                accept bind binmode chdir close closedir connect dbmclose
-                dbmopen fcntl fileno flock fork getsockopt ioctl link listen
-                mkdir msgctl msgget msgrcv msgsnd open opendir pipe read
-                readlink recv rename rmdir seek semctl semget semop send
+                accept bind binmode chdir chmod close closedir connect
+                dbmclose dbmopen fcntl fileno flock fork getsockopt ioctl link
+                listen mkdir msgctl msgget msgrcv msgsnd open opendir pipe
+                read readlink recv rename rmdir seek semctl semget semop send
                 setsockopt shmctl shmget shmread shutdown socketpair symlink
                 sysopen sysread sysseek syswrite truncate umask unlink
             >
@@ -1284,12 +1306,13 @@ Readonly::Hash my %AUTODIE_PARAMETER_TO_AFFECTED_BUILTINS_MAP => (
     ':all'      => {
         hashify(
             qw<
-                accept bind binmode chdir close closedir connect dbmclose
-                dbmopen exec fcntl fileno flock fork getsockopt ioctl link
-                listen mkdir msgctl msgget msgrcv msgsnd open opendir pipe
-                read readlink recv rename rmdir seek semctl semget semop send
-                setsockopt shmctl shmget shmread shutdown socketpair symlink
-                sysopen sysread sysseek system syswrite truncate umask unlink
+                accept bind binmode chdir chmod close closedir connect
+                dbmclose dbmopen exec fcntl fileno flock fork getsockopt ioctl
+                link listen mkdir msgctl msgget msgrcv msgsnd open opendir
+                pipe read readlink recv rename rmdir seek semctl semget semop
+                send setsockopt shmctl shmget shmread shutdown socketpair
+                symlink sysopen sysread sysseek system syswrite truncate umask
+                unlink
             >
         )
     },
@@ -1370,6 +1393,12 @@ This module provides several static subs and variables that are useful
 for developing L<Perl::Critic::Policy|Perl::Critic::Policy>
 subclasses.  Unless you are writing Policy modules, you probably don't
 care about this package.
+
+
+=head1 INTERFACE SUPPORT
+
+This is considered to be a public module.  Any changes to its
+interface will go through a deprecation cycle.
 
 
 =head1 IMPORTABLE SUBS
@@ -1628,14 +1657,8 @@ passed the nodes that represent the interior of a list, like:
 
 =item C<is_script( $document )>
 
-Given a L<PPI::Document|PPI::Document>, test if it starts with
-C</#!.*/>.  If so, it is judged to be a script instead of a module.
-Also, if the filename of the document ends in ".PL" then it is
-also judged to be a script.  However, this only works if the
-document is a L<PPI::Document::File|PPI::Document::File>.  If it
-isn't, then the filename is not available and it has no bearing on
-how the document is judged.
-See C<shebang_line()>.
+B<This subroutine is deprecated and will be removed in a future release.> You
+should use the L<Perl::Critic::Document/"is_program()"> method instead.
 
 
 =item C<is_in_void_context( $token )>
@@ -1947,12 +1970,12 @@ L<Perl::Critic::Utils::PPI|Perl::Critic::Utils::PPI>,
 
 =head1 AUTHOR
 
-Jeffrey Ryan Thalhammer <thaljef@cpan.org>
+Jeffrey Ryan Thalhammer <jeff@imaginative-software.com>
 
 
 =head1 COPYRIGHT
 
-Copyright (c) 2005-2009 Jeffrey Ryan Thalhammer.  All rights reserved.
+Copyright (c) 2005-2010 Imaginative Software Systems.  All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

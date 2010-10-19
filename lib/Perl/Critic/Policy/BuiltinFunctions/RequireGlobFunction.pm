@@ -15,7 +15,7 @@ use Readonly;
 use Perl::Critic::Utils qw{ :severities };
 use base 'Perl::Critic::Policy';
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -68,7 +68,7 @@ Instead, he recommends the use of the C<glob()> function as it makes
 it much more obvious what you're attempting to do.
 
     @files = <*.pl>;              # not ok
-    @files = glob( "*.pl" );      # ok
+    @files = glob '*.pl';         # ok
 
 
 =head1 CONFIGURATION
@@ -83,7 +83,7 @@ Graham TerMarsch <graham@howlingfrog.com>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2005-2009 Graham TerMarsch.  All rights reserved.
+Copyright (c) 2005-2010 Graham TerMarsch.  All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

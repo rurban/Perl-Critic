@@ -7,7 +7,7 @@
 # $Revision$
 ##############################################################################
 
-# Extra self-compliance tests for Policies.
+# Simple self-compliance tests for .run files.
 
 use strict;
 use warnings;
@@ -20,7 +20,7 @@ use Test::More;
 
 #-----------------------------------------------------------------------------
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 

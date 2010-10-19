@@ -23,7 +23,7 @@ use Test::More tests => 57;
 
 #-----------------------------------------------------------------------------
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -215,6 +215,7 @@ foreach my $severity ([qw{
         is( $options{$canonical}, 'cyan', $message );
     }
 }
+
 
 #-----------------------------------------------------------------------------
 # Intercept pod2usage so we can test invalid options and special switches

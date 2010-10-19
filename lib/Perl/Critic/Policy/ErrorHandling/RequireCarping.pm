@@ -18,7 +18,7 @@ use Perl::Critic::Utils qw{
 use Perl::Critic::Utils::PPI qw{ is_ppi_expression_or_generic_statement };
 use base 'Perl::Critic::Policy';
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -32,6 +32,12 @@ sub supported_parameters {
             name           => 'allow_messages_ending_with_newlines',
             description    => q{Don't complain about die or warn if the message ends in a newline.},
             default_string => '1',
+            behavior       => 'boolean',
+        },
+        {
+            name           => 'allow_in_main_unless_in_subroutine',
+            description    => q{Don't complain about die or warn in main::, unless in a subroutine.},
+            default_string => '0',
             behavior       => 'boolean',
         },
     );
@@ -62,6 +68,10 @@ sub violates {
     if ($self->{_allow_messages_ending_with_newlines}) {
         return if _last_flattened_argument_list_element_ends_in_newline($elem);
     }
+
+    return if $self->{_allow_in_main_unless_in_subroutine}
+        && !$self->_is_element_contained_in_subroutine( $elem )
+        && $self->_is_element_in_namespace_main( $elem );    # RT #56619
 
     my $desc = qq{"$elem" used instead of "$alternative"};
     return $self->violation( $desc, $EXPL, $elem );
@@ -356,6 +366,47 @@ sub _is_complex_expression_token {
     return $FALSE;
 }
 
+#-----------------------------------------------------------------------------
+# Check whether the given element is contained in a subroutine.
+
+sub _is_element_contained_in_subroutine {
+    my ( $self, $elem ) = @_;
+
+    my $parent = $elem;
+    while ( $parent = $parent->parent() ) {
+        $parent->isa( 'PPI::Statement::Sub' ) and return $TRUE;
+        $parent->isa( 'PPI::Structure::Block' ) or next;
+        my $prior_elem = $parent->sprevious_sibling() or next;
+        $prior_elem->isa( 'PPI::Token::Word' )
+            and 'sub' eq $prior_elem->content()
+            and return $TRUE;
+    }
+
+    return $FALSE;
+}
+
+#-----------------------------------------------------------------------------
+# Check whether the given element is in main::
+
+sub _is_element_in_namespace_main {
+    my ( $self, $elem ) = @_;
+    my $current_elem = $elem;
+    my $prior_elem;
+
+    while ( $current_elem ) {
+        while ( $prior_elem = $current_elem->sprevious_sibling() ) {
+            if ( $prior_elem->isa( 'PPI::Statement::Package' ) ) {
+                return 'main' eq $prior_elem->namespace();
+            }
+        } continue {
+            $current_elem = $prior_elem;
+        }
+        $current_elem = $current_elem->parent();
+    }
+
+    return $TRUE;
+}
+
 1;
 
 __END__
@@ -407,21 +458,25 @@ none of the L<Carp|Carp> functions are necessary.
 
 =head1 CONFIGURATION
 
-If you give this policy an C<allow_messages_ending_with_newlines>
-option in your F<.perlcriticrc> with a false value, then this policy
-will disallow all uses of C<die> and C<warn>.
+By default, this policy allows uses of C<die> and C<warn> ending in an
+explicit newline. If you give this policy an
+C<allow_messages_ending_with_newlines> option in your F<.perlcriticrc>
+with a false value, then this policy will prohibit such uses.
 
     [ErrorHandling::RequireCarping]
     allow_messages_ending_with_newlines = 0
 
+If you give this policy an C<allow_in_main_unless_in_subroutine> option
+in your F<.perlcriticrc> with a true value, then this policy will allow
+C<die> and C<warn> in name space main:: unless they appear in a
+subroutine, even if they do not end in an explicit newline.
+
+    [ErrorHandling::RequireCarping]
+    allow_in_main_unless_in_subroutine = 1
 
 =head1 BUGS
 
-This should not complain about using C<warn> or C<die> if it's not in
-a function, or if it's in C<main::>.
-
-Also, should allow C<die> when it is obvious that the "message" is a
-reference.
+Should allow C<die> when it is obvious that the "message" is a reference.
 
 
 =head1 SEE ALSO
@@ -431,12 +486,12 @@ L<Carp::Always|Carp::Always>
 
 =head1 AUTHOR
 
-Jeffrey Ryan Thalhammer <thaljef@cpan.org>
+Jeffrey Ryan Thalhammer <jeff@imaginative-software.com>
 
 
 =head1 COPYRIGHT
 
-Copyright (c) 2005-2009 Jeffrey Ryan Thalhammer.  All rights reserved.
+Copyright (c) 2005-2010 Imaginative Software Systems.  All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

@@ -14,13 +14,14 @@ use warnings;
 use English qw(-no_match_vars);
 
 use Perl::Critic::PolicyFactory (-test => 1);
+use Perl::Critic::Statistics;
 use Perl::Critic::TestUtils;
 
-use Test::More (tests => 25);
+use Test::More tests => 24;
 
 #-----------------------------------------------------------------------------
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -28,8 +29,7 @@ Perl::Critic::TestUtils::block_perlcriticrc();
 
 #-----------------------------------------------------------------------------
 
-my $pkg = 'Perl::Critic::Statistics';
-use_ok( $pkg );
+my $package = 'Perl::Critic::Statistics';
 
 my @methods = qw(
     average_sub_mccabe
@@ -48,7 +48,7 @@ my @methods = qw(
 );
 
 for my $method ( @methods ) {
-    can_ok( $pkg, $method );
+    can_ok( $package, $method );
 }
 
 #-----------------------------------------------------------------------------
@@ -63,7 +63,7 @@ END_PERL
 
 #-----------------------------------------------------------------------------
 
-# User may not have Perl::Tidy installed...
+# Just don't get involved with Perl::Tidy.
 my $profile = { '-CodeLayout::RequireTidyCode' => {} };
 my $critic =
     Perl::Critic->new(
@@ -90,7 +90,7 @@ my %expected_stats = (
 );
 
 my $stats = $critic->statistics();
-isa_ok($stats, $pkg);
+isa_ok($stats, $package);
 
 while ( my($method, $expected) = each %expected_stats) {
     is( $stats->$method, $expected, "Statistics: $method");
@@ -98,7 +98,7 @@ while ( my($method, $expected) = each %expected_stats) {
 
 #-----------------------------------------------------------------------------
 
-# ensure we run true if this test is loaded by
+# ensure we return true if this test is loaded by
 # t/15_statistics.t_without_optional_dependencies.t
 1;
 

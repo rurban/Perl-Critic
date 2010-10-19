@@ -13,7 +13,7 @@ use warnings;
 
 use Readonly;
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 use Perl::Critic::Exception::AggregateConfiguration;
 use Perl::Critic::Exception::Configuration::Option::Policy::ParameterValue;
@@ -51,54 +51,6 @@ sub new {
 
 
     return bless \%self, $class;
-}
-
-#-----------------------------------------------------------------------------
-
-sub _validate_maximum_violations_per_document {
-    my ($self, $errors) = @_;
-
-    my $user_maximum_violations =
-        $self->get_maximum_violations_per_document();
-
-    if ( defined $user_maximum_violations ) {
-        if (
-                $user_maximum_violations =~ m/$NO_LIMIT/xmsio
-            or  $user_maximum_violations eq $EMPTY
-        ) {
-            $user_maximum_violations = undef;
-        }
-        elsif ( not is_integer($user_maximum_violations) ) {
-            $errors->add_exception(
-                new_parameter_value_exception(
-                    'maximum_violations_per_document',
-                    $user_maximum_violations,
-                    undef,
-                    "does not look like an integer.\n"
-                )
-            );
-
-            return;
-        }
-        elsif ( $user_maximum_violations < 0 ) {
-            $errors->add_exception(
-                new_parameter_value_exception(
-                    'maximum_violations_per_document',
-                    $user_maximum_violations,
-                    undef,
-                    "is not greater than or equal to zero.\n"
-                )
-            );
-
-            return;
-        }
-
-        $self->set_maximum_violations_per_document(
-            $user_maximum_violations
-        );
-    }
-
-    return;
 }
 
 #-----------------------------------------------------------------------------
@@ -262,9 +214,16 @@ __END__
 Perl::Critic::PolicyConfig - Configuration data for a Policy.
 
 
+
 =head1 DESCRIPTION
 
 A container for the configuration of a Policy.
+
+
+=head1 INTERFACE SUPPORT
+
+This is considered to be a non-public class.  Its interface is subject
+to change without notice.
 
 
 =head1 METHODS
@@ -365,7 +324,7 @@ Elliot Shank <perl@galumph.com>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2008-2009 Elliot Shank.  All rights reserved.
+Copyright (c) 2008-2010 Elliot Shank.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

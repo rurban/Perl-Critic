@@ -15,7 +15,7 @@ use Readonly;
 use Perl::Critic::Utils qw{ :severities :classification };
 use base 'Perl::Critic::Policy';
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -137,7 +137,7 @@ Perl Foundation.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2007-2009 Chris Dolan.
+Copyright (c) 2007-2010 Chris Dolan.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

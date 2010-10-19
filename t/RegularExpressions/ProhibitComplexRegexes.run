@@ -5,8 +5,6 @@
 # $Revision$
 ##############################################################################
 
-## global prerequisites Regexp::Parser
-
 ## name basic passes
 ## failures 0
 ## cut
@@ -40,7 +38,6 @@ m/ foo foo foo foo foo foo foo foo foo foo foo foo foo foo foo foo foo foo foo f
 
 ## name basic failures, m//x
 ## failures 1
-## optional_modules Regexp::Parser
 ## cut
 
 m/foo # this is a foo
@@ -65,6 +62,37 @@ m/ foo /;
 ## cut
 
 m/foofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoofoo(/x;
+
+#-----------------------------------------------------------------------------
+
+## name RT 36098 forgive long (and presumably descriptive) variable names
+## failures 0
+## parms {max_characters => 20}
+## cut
+
+m/ $now_is_the_time_for_all_good_men_to_come_to /;
+m/ \\$now_is_the_time_for_all_good_men_to_come_to /;
+m/ $now::is::the::time::for::all::good::men::to::come::to /;
+m/ ${^_now_is_the_time_for_all_good_men_to_come_to} /;
+m/ ${now_is_the_time_for_all_good_men_to_come_to} /;
+m/ ${now::is::the::time::for::all::good::men::to::come::to} /;
+m/ @now_is_the_time_for_all_good_men_to_come_to /;
+m/ @{^_now_is_the_time_for_all_good_men_to_come_to} /;
+m/ @{now_is_the_time_for_all_good_men_to_come_to} /;
+m/ @{now::is::the::time::for::all::good::men::to::come::to} /;
+m/ $#now_is_the_time_for_all_good_men_to_come_to /;
+m/ $#{^_now_is_the_time_for_all_good_men_to_come_to} /;
+
+#-----------------------------------------------------------------------------
+
+## name RT 36098 things that look like interpolation but are not
+## failures 3
+## parms {max_characters => 20}
+## cut
+
+m/ \$now_is_the_time_for_all_good_men_to_come_to /;
+m/ \\\$now_is_the_time_for_all_good_men_to_come_to /;
+m' $now_is_the_time_for_all_good_men_to_come_to ';
 
 #-----------------------------------------------------------------------------
 # Local Variables:

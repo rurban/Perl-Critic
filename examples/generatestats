@@ -7,12 +7,11 @@
 # $Revision$
 ##############################################################################
 
-## no critic (ErrorHandling::RequireUseOfExceptions)
 use 5.008001;
 use strict;
 use warnings;
 
-use version; our $VERSION = qv('1.096');
+use version; our $VERSION = qv('1.110');
 
 use Carp qw{ croak };
 use English qw{ -no_match_vars };
@@ -269,8 +268,7 @@ Elliot Shank  C<< <perl@galumph.com> >>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2006-2009, Elliot Shank C<< <perl@galumph.com> >>. All rights
-reserved.
+Copyright (c) 2006-2010, Elliot Shank.
 
 This module is free software; you can redistribute it and/or modify it under
 the same terms as Perl itself. See L<perlartistic|perlartistic>.

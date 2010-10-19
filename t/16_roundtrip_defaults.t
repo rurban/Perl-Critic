@@ -18,16 +18,12 @@ use Perl::Critic::Config;
 use Perl::Critic::ProfilePrototype;
 use Perl::Critic::Utils qw{ :characters :severities };
 
+use Test::Deep;
 use Test::More;
 
 #-----------------------------------------------------------------------------
 
-our $VERSION = '1.096';
-
-#-----------------------------------------------------------------------------
-
-eval 'use Test::Deep; 1'
-    or plan skip_all => 'Test::Deep required to test round-trip of default values';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -50,7 +46,7 @@ foreach my $policy (@default_policies) {
         $policy_test_count += scalar @{$policy->get_parameters()};
     }
 }
-my $test_count = 17 + $policy_test_count;
+my $test_count = 18 + $policy_test_count;
 plan tests => $test_count;
 
 #-----------------------------------------------------------------------------
@@ -201,6 +197,16 @@ is(
     $derived_configuration->color_severity_lowest(),
     $default_configuration->color_severity_lowest(),
     'color_severity_lowest',
+);
+
+#-----------------------------------------------------------------------------
+
+my @derived_program_extensions = $derived_configuration->program_extensions();
+my @default_program_extensions = $default_configuration->program_extensions();
+cmp_deeply(
+    \@derived_program_extensions,
+    \@default_program_extensions,
+    'program_extensions',
 );
 
 #-----------------------------------------------------------------------------

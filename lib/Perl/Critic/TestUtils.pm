@@ -29,7 +29,7 @@ use Perl::Critic::Exception::Fatal::Internal qw{ &throw_internal };
 use Perl::Critic::Utils qw{ :severities :data_conversion policy_long_name };
 use Perl::Critic::PolicyFactory (-test => 1);
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 Readonly::Array our @EXPORT_OK => qw(
     pcritique pcritique_with_violations
@@ -253,6 +253,7 @@ sub _subtests_from_file {
     my @subtests;
 
     my $incode = 0;
+    my $cut_in_code = 0;
     my $subtest;
     my $lineno;
     while ( <$fh> ) {
@@ -278,6 +279,7 @@ sub _subtests_from_file {
                 }
                 $subtest->{lineno} = $lineno;
                 $incode = 0;
+                $cut_in_code = 0;
             }
             if ($incode) {
                 throw_internal "Header line found while still in code: $test_file";
@@ -286,8 +288,10 @@ sub _subtests_from_file {
         }
         elsif ( $subtest ) {
             $incode = 1;
-            # Don't start a subtest if we're not in one
-            push @{$subtest->{code}}, $line;
+            $cut_in_code ||= $line =~ m/ \A [#][#] [ ] cut \z /smx;
+            # Don't start a subtest if we're not in one.
+            # Don't add to the test if we have seen a '## cut'.
+            $cut_in_code or push @{$subtest->{code}}, $line;
         }
         elsif (@subtests) {
             ## don't complain if we have not yet hit the first test
@@ -375,11 +379,17 @@ __END__
 
 =pod
 
-=for stopwords subtest subtests
+=for stopwords RCS subtest subtests
 
 =head1 NAME
 
 Perl::Critic::TestUtils - Utility functions for testing new Policies.
+
+
+=head1 INTERFACE SUPPORT
+
+This is considered to be a public module.  Any changes to its
+interface will go through a deprecation cycle.
 
 
 =head1 SYNOPSIS
@@ -410,7 +420,7 @@ Perl::Critic::TestUtils - Utility functions for testing new Policies.
 
 This module is used by L<Perl::Critic|Perl::Critic> only for
 self-testing. It provides a few handy subroutines for testing new
-Perl::Critic::Policy modules.  Look at the test scripts that ship with
+Perl::Critic::Policy modules.  Look at the test programs that ship with
 Perl::Critic for more examples of how to use these subroutines.
 
 
@@ -594,6 +604,14 @@ C<fcritique> for more details):
 The value of C<parms> will get C<eval>ed and passed to C<pcritique()>,
 so be careful.
 
+In general, a subtest document runs from the C<## cut> that starts it to
+either the next C<## name> or the end of the file. In very rare circumstances
+you may need to end the test document earlier. A second C<## cut> will do
+this. The only known need for this is in
+F<t/Miscellanea/RequireRcsKeywords.run>, where it is used to prevent the RCS
+keywords in the file footer from producing false positives or negatives in the
+last test.
+
 Note that nowhere within the F<.run> file itself do you specify the
 policy that you're testing.  That's implicit within the filename.
 
@@ -615,7 +633,7 @@ and the rest of the L<Perl::Critic|Perl::Critic> team.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2005-2009 Chris Dolan.
+Copyright (c) 2005-2010 Chris Dolan.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

@@ -14,11 +14,10 @@ use warnings;
 use Readonly;
 
 use Perl::Critic::Utils qw{ :severities };
-use Perl::Critic::Utils::PPIRegexp qw{ get_modifiers };
 
 use base 'Perl::Critic::Policy';
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -39,7 +38,7 @@ sub applies_to           { return qw<PPI::Token::Regexp::Match
 sub violates {
     my ( $self, $elem, undef ) = @_;
 
-    my %modifiers = get_modifiers($elem);
+    my %modifiers = $elem->get_modifiers();
     if ( not $modifiers{s} ) {
         return $self->violation( $DESC, $EXPL, $elem );
     }
@@ -83,7 +82,7 @@ This Policy is not configurable except for the standard options.
 
 =head1 NOTES
 
-Be cautions about slapping modifier flags onto existing regular
+Be cautious about slapping modifier flags onto existing regular
 expressions, as they can drastically alter their meaning.  See
 L<http://www.perlmonks.org/?node_id=484238> for an interesting
 discussion on the effects of blindly modifying regular expression
@@ -92,12 +91,12 @@ flags.
 
 =head1 AUTHOR
 
-Jeffrey Ryan Thalhammer  <thaljef@cpan.org>
+Jeffrey Ryan Thalhammer  <jeff@imaginative-software.com>
 
 
 =head1 COPYRIGHT
 
-Copyright (c) 2005-2009 Jeffrey Ryan Thalhammer. All rights reserved.
+Copyright (c) 2005-2010 Imaginative Software Systems. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

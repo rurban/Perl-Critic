@@ -17,11 +17,11 @@ use Perl::Critic::OptionsProcessor;
 use Perl::Critic::Utils qw< :booleans >;
 use Perl::Critic::Utils::Constants qw< :color_severity >;
 
-use Test::More tests => 52;
+use Test::More tests => 54;
 
 #-----------------------------------------------------------------------------
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -56,6 +56,8 @@ our $VERSION = '1.096';
     is($processor->color_severity_lowest(),
                                $PROFILE_COLOR_SEVERITY_LOWEST_DEFAULT,
                                'native default color-severity-lowest');
+    is_deeply($processor->program_extensions(), [],
+                               'native default program extensions');
 }
 
 #-----------------------------------------------------------------------------
@@ -78,6 +80,7 @@ our $VERSION = '1.096';
          'color-severity-medium'    => 'blue',
          'color-severity-low'       => 'gray',
          'color-severity-lowest'    => 'scots tartan',
+         'program-extensions'  => '.PL .pl .t',
     );
 
     my $processor = Perl::Critic::OptionsProcessor->new( %user_defaults );
@@ -102,6 +105,8 @@ our $VERSION = '1.096';
                                 'gray',     'user default color_severity_low');
     is($processor->color_severity_lowest(),
                                 'scots tartan', 'user default color_severity_lowest');
+    is_deeply($processor->program_extensions(), [ qw(.PL .pl .t) ],
+                                            'user default program-extensions');
 }
 
 #-----------------------------------------------------------------------------
@@ -200,7 +205,7 @@ our $VERSION = '1.096';
 
 #-----------------------------------------------------------------------------
 
-# ensure we run true if this test is loaded by
+# ensure we return true if this test is loaded by
 # t/04_defaults.t_without_optional_dependencies.t
 1;
 

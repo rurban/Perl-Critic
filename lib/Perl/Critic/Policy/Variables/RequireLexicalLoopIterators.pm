@@ -15,7 +15,7 @@ use Readonly;
 use Perl::Critic::Utils qw{ :severities };
 use base 'Perl::Critic::Policy';
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -35,16 +35,17 @@ sub violates {
     my ( $self, $elem, undef ) = @_;
 
     # First child will be 'for' or 'foreach' keyword
+    return if $elem->type() ne 'foreach';
+
     my $first_child = $elem->schild(0);
-    return if !$first_child;
-    return if $first_child ne 'for' and $first_child ne 'foreach';
+    return if not $first_child;
+    my $start = $first_child->isa('PPI::Token::Label') ? 1 : 0;
 
-    # The second child could be the iteration list
-    my $second_child = $elem->schild(1);
-    return if !$second_child;
-    return if $second_child->isa('PPI::Structure::ForLoop');
+    my $potential_scope = $elem->schild($start + 1);
+    return if not $potential_scope;
+    return if $potential_scope->isa('PPI::Structure::List');
 
-    return if $second_child eq 'my';
+    return if $potential_scope eq 'my';
 
     return $self->violation( $DESC, $EXPL, $elem );
 }
@@ -117,12 +118,12 @@ This Policy is not configurable except for the standard options.
 
 =head1 AUTHOR
 
-Jeffrey Ryan Thalhammer <thaljef@cpan.org>
+Jeffrey Ryan Thalhammer <jeff@imaginative-software.com>
 
 
 =head1 COPYRIGHT
 
-Copyright (c) 2005-2009 Jeffrey Ryan Thalhammer.  All rights reserved.
+Copyright (c) 2005-2010 Imaginative Software Systems.  All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

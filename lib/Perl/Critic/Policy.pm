@@ -47,7 +47,7 @@ use Perl::Critic::Violation qw<>;
 
 use Exception::Class;   # this must come after "use P::C::Exception::*"
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -112,6 +112,12 @@ sub new {
     }
 
     return $self;
+}
+
+#-----------------------------------------------------------------------------
+
+sub is_safe {
+    return $TRUE;
 }
 
 #-----------------------------------------------------------------------------
@@ -260,6 +266,24 @@ sub get_short_name {
 
 #-----------------------------------------------------------------------------
 
+sub is_enabled {
+    my ($self) = @_;
+
+    return $self->{_enabled};
+}
+
+#-----------------------------------------------------------------------------
+
+sub __set_enabled {
+    my ($self, $new_value) = @_;
+
+    $self->{_enabled} = $new_value;
+
+    return;
+}
+
+#-----------------------------------------------------------------------------
+
 sub applies_to {
     return qw(PPI::Element);
 }
@@ -389,7 +413,7 @@ sub violates {
 
 #-----------------------------------------------------------------------------
 
-sub violation {  ##no critic(ArgUnpacking)
+sub violation {  ## no critic (ArgUnpacking)
     my ( $self, $desc, $expl, $elem ) = @_;
     # HACK!! Use goto instead of an explicit call because P::C::V::new() uses caller()
     my $sev = $self->get_severity();
@@ -483,16 +507,6 @@ sub _format_lack_of_parameter_metadata {
         'Cannot programmatically discover what parameters this policy takes.';
 }
 
-sub _get_source_file {
-    my ($self) = @_;
-
-    my $relative_path =
-        File::Spec->catfile( split m/::/xms, ref $self ) . '.pm';
-
-    return $INC{$relative_path};
-}
-
-
 #-----------------------------------------------------------------------------
 # Apparently, some perls do not implicitly stringify overloading
 # objects before doing a comparison.  This causes a couple of our
@@ -532,22 +546,21 @@ L<Perl::Critic::DEVELOPER|Perl::Critic::DEVELOPER> document included
 in this distribution.
 
 
+=head1 INTERFACE SUPPORT
+
+This is considered to be a public class.  Any changes to its interface
+will go through a deprecation cycle.
+
+
 =head1 METHODS
 
 =over
 
-=item C<< new(key1 => value1, key2 => value2 ... ) >>
+=item C<< new( ... ) >>
 
-Returns a reference to a new subclass of Perl::Critic::Policy. If your
-Policy requires any special arguments, they will be passed in here as
-key-value pairs.  Users of L<perlcritic|perlcritic> can specify these
-in their config file.  Unless you override the C<new> method, the
-default method simply returns a reference to an empty hash that has
-been blessed into your subclass.  However, you really should not
-override this; override C<initialize_if_enabled()> instead.
-
-This constructor is always called regardless of whether the user has
-enabled this Policy or not.
+Don't call this.  As a Policy author, do not implement this.  Use the
+C<initialize_if_enabled()> method for your Policy setup.  See the
+L<developer|Perl::Critic::DEVELOPER> documentation for more.
 
 
 =item C<< initialize_if_enabled( $config ) >>
@@ -628,6 +641,13 @@ Return the name of this policy without the "Perl::Critic::Policy::"
 prefix.
 
 
+=item C< is_enabled() >
+
+Answer whether this policy is really active or not.  Returns a true
+value if it is, a false, yet defined, value if it isn't, and an
+undefined value if it hasn't yet been decided whether it will be.
+
+
 =item C< applies_to() >
 
 Returns a list of the names of PPI classes that this Policy cares
@@ -647,8 +667,8 @@ override this.
 
 Returns the maximum number of violations this policy will report for a
 single document.  If this is not defined, then there is no limit.  If
-L<set_maximum_violations_per_document()> has not been invoked, then
-L<default_maximum_violations_per_document()> is returned.
+L</set_maximum_violations_per_document()> has not been invoked, then
+L</default_maximum_violations_per_document()> is returned.
 
 
 =item C< set_maximum_violations_per_document() >
@@ -744,13 +764,6 @@ circumstance and the one where this policy does not take any
 parameters, it is necessary to call C<parameter_metadata_available()>.
 
 
-=item C< get_parameter( $parameter_name ) >
-
-Returns the
-L<Perl::Critic::PolicyParameter|Perl::Critic::PolicyParameter> with
-the specified name.
-
-
 =item C<set_format( $format )>
 
 Class method.  Sets the format for all Policy objects when they are
@@ -769,6 +782,22 @@ they are evaluated in string context.
 Returns a string representation of the policy.  The content of the
 string depends on the current value returned by C<get_format()>.
 See L<"OVERLOADS"> for the details.
+
+
+=item C<is_safe()>
+
+Answer whether this Policy can be used to analyze untrusted code, i.e. the
+Policy doesn't have any potential side effects.
+
+This method returns a true value by default.
+
+An "unsafe" policy might attempt to compile the code, which, if you have
+C<BEGIN> or C<CHECK> blocks that affect files or connect to databases, is not
+a safe thing to do.  If you are writing a such a Policy, then you should
+override this method to return false.
+
+By default L<Perl::Critic|Perl::Critic> will not run unsafe policies.
+
 
 
 =back
@@ -865,12 +894,12 @@ The current maximum number of violations per document of the policy.
 
 =head1 AUTHOR
 
-Jeffrey Ryan Thalhammer <thaljef@cpan.org>
+Jeffrey Ryan Thalhammer <jeff@imaginative-software.com>
 
 
 =head1 COPYRIGHT
 
-Copyright (c) 2005-2009 Jeffrey Ryan Thalhammer.  All rights reserved.
+Copyright (c) 2005-2010 Imaginative Software Systems.  All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

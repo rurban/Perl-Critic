@@ -10,13 +10,15 @@ package Perl::Critic::Violation;
 use 5.006001;
 use strict;
 use warnings;
-use English qw(-no_match_vars);
+
+use English qw< -no_match_vars >;
 use Readonly;
 
-use File::Basename qw(basename);
-use IO::String qw();
-use Pod::PlainText qw();
-use String::Format qw(stringf);
+use File::Basename qw< basename >;
+use IO::String qw< >;
+use Pod::PlainText qw< >;
+use Scalar::Util qw< blessed >;
+use String::Format qw< stringf >;
 
 use overload ( q{""} => 'to_string', cmp => '_compare' );
 
@@ -25,11 +27,19 @@ use Perl::Critic::Utils::POD qw<
     get_pod_section_for_module
     trim_pod_section
 >;
-use Perl::Critic::Exception::Fatal::Internal qw< &throw_internal >;
+use Perl::Critic::Exception::Fatal::Internal qw< throw_internal >;
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
-#Class variables...
+
+Readonly::Scalar my $LOCATION_LINE_NUMBER               => 0;
+Readonly::Scalar my $LOCATION_COLUMN_NUMBER             => 1;
+Readonly::Scalar my $LOCATION_VISUAL_COLUMN_NUMBER      => 2;
+Readonly::Scalar my $LOCATION_LOGICAL_LINE_NUMBER       => 3;
+Readonly::Scalar my $LOCATION_LOGICAL_FILENAME          => 4;
+
+
+# Class variables...
 my $format = "%m at line %l, column %c. %e.\n"; # Default stringy format
 my %diagnostics = ();  # Cache of diagnostic messages
 
@@ -40,56 +50,58 @@ Readonly::Scalar my $CONSTRUCTOR_ARG_COUNT => 5;
 sub new {
     my ( $class, $desc, $expl, $elem, $sev ) = @_;
 
-    #Check arguments to help out developers who might
-    #be creating new Perl::Critic::Policy modules.
+    # Check arguments to help out developers who might
+    # be creating new Perl::Critic::Policy modules.
 
     if ( @_ != $CONSTRUCTOR_ARG_COUNT ) {
         throw_internal 'Wrong number of args to Violation->new()';
     }
 
-    if ( ! eval { $elem->isa( 'PPI::Element' ) } ) {
+    if ( eval { $elem->isa( 'Perl::Critic::Document' ) } ) {
+        # break the facade, return the real PPI::Document
+        $elem = $elem->ppi_document();
+    }
 
-        if ( eval { $elem->isa( 'Perl::Critic::Document' ) } ) {
-            # break the facade, return the real PPI::Document
-            $elem = $elem->{_doc};
-        }
-        else {
-            throw_internal
-                '3rd arg to Violation->new() must be a PPI::Element';
-        }
+    if ( not eval { $elem->isa( 'PPI::Element' ) } ) {
+        throw_internal '3rd arg to Violation->new() must be a PPI::Element';
     }
 
     # Strip punctuation.  These are controlled by the user via the
     # formats.  He/She can use whatever makes sense to them.
     ($desc, $expl) = _chomp_periods($desc, $expl);
 
-    #Create object
+    # Create object
     my $self = bless {}, $class;
     $self->{_description} = $desc;
     $self->{_explanation} = $expl;
     $self->{_severity}    = $sev;
     $self->{_policy}      = caller;
-    $self->{_elem}        = $elem;
 
-    # Do these now before the weakened $doc gets garbage collected
+    # PPI eviscerates the Elements in a Document when the Document gets
+    # DESTROY()ed, and thus they aren't useful after it is gone.  So we have
+    # to preemptively grab everything we could possibly want.
+    $self->{_element_class} = blessed $elem;
+
     my $top = $elem->top();
     $self->{_filename} = $top->can('filename') ? $top->filename() : undef;
     $self->{_source}   = _first_line_of_source( $elem );
+    $self->{_location} =
+        $elem->location() || [ 0, 0, 0, 0, $self->filename() ];
 
     return $self;
 }
 
 #-----------------------------------------------------------------------------
 
-sub set_format { return $format = verbosity_to_format( $_[0] ); }  ##no critic(ArgUnpacking)
+sub set_format { return $format = verbosity_to_format( $_[0] ); }  ## no critic(ArgUnpacking)
 sub get_format { return $format;         }
 
 #-----------------------------------------------------------------------------
 
-sub sort_by_location {  ##no critic(ArgUnpacking)
+sub sort_by_location {  ## no critic(ArgUnpacking)
 
-    ref $_[0] || shift;              #Can call as object or class method
-    return scalar @_ if ! wantarray; #In case we are called in scalar context
+    ref $_[0] || shift;              # Can call as object or class method
+    return scalar @_ if ! wantarray; # In case we are called in scalar context
 
     ## TODO: What if $a and $b are not Violation objects?
     return
@@ -101,10 +113,10 @@ sub sort_by_location {  ##no critic(ArgUnpacking)
 
 #-----------------------------------------------------------------------------
 
-sub sort_by_severity {  ##no critic(ArgUnpacking)
+sub sort_by_severity {  ## no critic(ArgUnpacking)
 
-    ref $_[0] || shift;              #Can call as object or class method
-    return scalar @_ if ! wantarray; #In case we are called in scalar context
+    ref $_[0] || shift;              # Can call as object or class method
+    return scalar @_ if ! wantarray; # In case we are called in scalar context
 
     ## TODO: What if $a and $b are not Violation objects?
     return
@@ -119,7 +131,39 @@ sub sort_by_severity {  ##no critic(ArgUnpacking)
 sub location {
     my $self = shift;
 
-    return $self->{_location} ||= $self->{_elem}->location() || [0,0,0];
+    return $self->{_location};
+}
+
+#-----------------------------------------------------------------------------
+
+sub line_number {
+    my ($self) = @_;
+
+    return $self->location()->[$LOCATION_LINE_NUMBER];
+}
+
+#-----------------------------------------------------------------------------
+
+sub logical_line_number {
+    my ($self) = @_;
+
+    return $self->location()->[$LOCATION_LOGICAL_LINE_NUMBER];
+}
+
+#-----------------------------------------------------------------------------
+
+sub column_number {
+    my ($self) = @_;
+
+    return $self->location()->[$LOCATION_COLUMN_NUMBER];
+}
+
+#-----------------------------------------------------------------------------
+
+sub visual_column_number {
+    my ($self) = @_;
+
+    return $self->location()->[$LOCATION_VISUAL_COLUMN_NUMBER];
 }
 
 #-----------------------------------------------------------------------------
@@ -187,10 +231,25 @@ sub filename {
 
 #-----------------------------------------------------------------------------
 
+sub logical_filename {
+    my ($self) = @_;
+
+    return $self->location()->[$LOCATION_LOGICAL_FILENAME];
+}
+
+#-----------------------------------------------------------------------------
 
 sub source {
     my $self = shift;
     return $self->{_source};
+}
+
+#-----------------------------------------------------------------------------
+
+sub element_class {
+    my ($self) = @_;
+
+    return $self->{_element_class};
 }
 
 #-----------------------------------------------------------------------------
@@ -203,15 +262,19 @@ sub to_string {
 
     # Wrap the more expensive ones in sub{} to postpone evaluation
     my %fspec = (
-         'f' => sub { $self->filename() },
-         'F' => sub { basename( $self->filename()) },
-         'l' => sub { $self->location->[0] },
-         'c' => sub { $self->location->[1] },
+         'f' => sub { $self->logical_filename()             },
+         'F' => sub { basename( $self->logical_filename() ) },
+         'g' => sub { $self->filename()                     },
+         'G' => sub { basename( $self->filename() )         },
+         'l' => sub { $self->logical_line_number()          },
+         'L' => sub { $self->line_number()                  },
+         'c' => sub { $self->visual_column_number()         },
+         'C' => sub { $self->element_class()                },
          'm' => $self->description(),
          'e' => $self->explanation(),
          's' => $self->severity(),
-         'd' => sub { $self->diagnostics() },
-         'r' => sub { $self->source() },
+         'd' => sub { $self->diagnostics()                  },
+         'r' => sub { $self->source()                       },
          'P' => $long_policy,
          'p' => $short_policy,
     );
@@ -240,7 +303,7 @@ sub _first_line_of_source {
     my $stmnt = $elem->statement() || $elem;
     my $code_string = $stmnt->content() || $EMPTY;
 
-    #Chop everything but the first line (without newline);
+    # Chop everything but the first line (without newline);
     $code_string =~ s{ \n.* }{}smx;
     return $code_string;
 }
@@ -276,10 +339,10 @@ Perl::Critic::Violation - A violation of a Policy found in some source code.
   use PPI;
   use Perl::Critic::Violation;
 
-  my $elem = $doc->child(0);      #$doc is a PPI::Document object
-  my $desc = 'Offending code';    #Describe the violation
-  my $expl = [1,45,67];           #Page numbers from PBP
-  my $sev  = 5;                   #Severity level of this violation
+  my $elem = $doc->child(0);      # $doc is a PPI::Document object
+  my $desc = 'Offending code';    # Describe the violation
+  my $expl = [1,45,67];           # Page numbers from PBP
+  my $sev  = 5;                   # Severity level of this violation
 
   my $vio  = Perl::Critic::Violation->new($desc, $expl, $node, $sev);
 
@@ -292,6 +355,12 @@ layer so that clients of L<Perl::Critic|Perl::Critic> don't have to
 know anything about L<PPI|PPI>.  The C<violations> method of all
 L<Perl::Critic::Policy|Perl::Critic::Policy> subclasses must return a
 list of these Perl::Critic::Violation objects.
+
+
+=head1 INTERFACE SUPPORT
+
+This is considered to be a public class.  Any changes to its interface
+will go through a deprecation cycle.
 
 
 =head1 CONSTRUCTOR
@@ -330,9 +399,38 @@ based upon the specific code violating the policy.
 
 =item C<location()>
 
-Returns a three-element array reference containing the line and real &
-virtual column numbers where this Violation occurred, as in
-L<PPI::Element|PPI::Element>.
+Don't use this method.  Use the C<line_number()>,
+C<logical_line_number()>, C<column_number()>,
+C<visual_column_number()>, and C<logical_filename()> methods instead.
+
+Returns a five-element array reference containing the line and real &
+virtual column and logical numbers and logical file name where this
+Violation occurred, as in L<PPI::Element|PPI::Element>.
+
+
+=item C<line_number()>
+
+Returns the physical line number that the violation was found on.
+
+
+=item C<logical_line_number()>
+
+Returns the logical line number that the violation was found on.  This
+can differ from the physical line number when there were C<#line>
+directives in the code.
+
+
+=item C<column_number()>
+
+Returns the physical column that the violation was found at.  This
+means that hard tab characters count as a single character.
+
+
+=item C<visual_column_number()>
+
+Returns the column that the violation was found at, as it would appear
+if hard tab characters were expanded, based upon the value of
+L<PPI::Document/"tab_width [ $width ]">.
 
 
 =item C<filename()>
@@ -340,6 +438,13 @@ L<PPI::Element|PPI::Element>.
 Returns the path to the file where this Violation occurred.  In some
 cases, the path may be undefined because the source code was not read
 directly from a file.
+
+
+=item C<logical_filename()>
+
+Returns the logical path to the file where the Violation occurred.
+This can differ from C<filename()> when there was a C<#line> directive
+in the code.
 
 
 =item C<severity()>
@@ -383,6 +488,12 @@ code spans multiple lines (e.g. multi-line statements, subroutines or
 other blocks), then only the first line will be returned.
 
 
+=item C<element_class()>
+
+Returns the L<PPI::Element|PPI::Element> subclass of the code that caused this
+exception.
+
+
 =item C<set_format( $format )>
 
 Class method.  Sets the format for all Violation objects when they are
@@ -421,14 +532,27 @@ characters are:
     %c        Column number where the violation occurred
     %d        Full diagnostic discussion of the violation (DESCRIPTION in POD)
     %e        Explanation of violation or page numbers in PBP
-    %F        Just the name of the file where the violation occurred.
-    %f        Path to the file where the violation occurred.
-    %l        Line number where the violation occurred
+    %F        Just the name of the logical file where the violation occurred.
+    %f        Path to the logical file where the violation occurred.
+    %G        Just the name of the physical file where the violation occurred.
+    %g        Path to the physical file where the violation occurred.
+    %l        Logical line number where the violation occurred
+    %L        Physical line number where the violation occurred
     %m        Brief description of the violation
     %P        Full name of the Policy module that created the violation
     %p        Name of the Policy without the Perl::Critic::Policy:: prefix
     %r        The string of source code that caused the violation
+    %C        The class of the PPI::Element that caused the violation
     %s        The severity level of the violation
+
+Explanation of the C<%F>, C<%f>, C<%G>, C<%G>, C<%l>, and C<%L> formats:
+Using C<#line> directives, you can affect what perl thinks the current line
+number and file name are; see L<perlsyn/Plain Old Comments (Not!)> for
+the details.  Under normal circumstances, the values of C<%F>, C<%f>, and
+C<%l> will match the values of C<%G>, C<%g>, and C<%L>, respectively.  In the
+presence of a C<#line> directive, the values of C<%F>, C<%f>, and C<%l> will
+change to take that directive into account.  The values of C<%G>, C<%g>, and
+C<%L> are unaffected by those directives.
 
 Here are some examples:
 
@@ -451,12 +575,12 @@ Here are some examples:
 
 =head1 AUTHOR
 
-Jeffrey Ryan Thalhammer <thaljef@cpan.org>
+Jeffrey Ryan Thalhammer <jeff@imaginative-software.com>
 
 
 =head1 COPYRIGHT
 
-Copyright (c) 2005-2009 Jeffrey Ryan Thalhammer.  All rights reserved.
+Copyright (c) 2005-2010 Imaginative Software Systems.  All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

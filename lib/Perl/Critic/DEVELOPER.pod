@@ -96,7 +96,7 @@ what's wrong."  The explanation can be either a string with further
 details, or a reference to an array of integers that correspond to
 page numbers in I<PBP>.  We make them read-only because they never
 change.  (See
-L<Perl::Critic::ValuesAndExpressions::ProhibitConstantPragma|Perl::Critic::ValuesAndExpressions::ProhibitConstantPragma>
+L<Perl::Critic::Policy::ValuesAndExpressions::ProhibitConstantPragma|Perl::Critic::Policy::ValuesAndExpressions::ProhibitConstantPragma>
 for why we don't C<use constant>.)
 
     Readonly::Scalar my $DESC => q{Expression form of "grep"};
@@ -183,20 +183,19 @@ what we declared back in the C<applies_to()> method.  However, we
 didn't specify exactly which "word" we were looking for.  Evaluating a
 PPI element in a string context returns the literal form of the code.
 (You can also use the C<content()> method.)  So we make sure that this
-C<PPI::Token::Word|PPI::Token::Word> is, in fact, "grep".  If it's
-not, then we don't need to bother examining it.
+C<PPI::Token::Word> is, in fact, "grep".  If it's not, then we don't
+need to bother examining it.
 
         return if $elem ne 'grep';
 
-The C<PPI::Token::Word|PPI::Token::Word> class is also used for
-barewords and methods called on object references.  It is possible for
-someone to declare a bareword hash key as C<< %hash = ( grep => 'foo'
-) >>.  We don't want to test those types of elements because they
-don't represent function calls to C<grep>.  So we use one of handy
-utility functions from L<Perl::Critic::Utils|Perl::Critic::Utils> to
-make sure that this "grep" is actually in the right context.  (The
-C<is_function_call()> subroutine is brought in via the
-C<:classification> tag.)
+The C<PPI::Token::Word> class is also used for barewords and methods
+called on object references.  It is possible for someone to declare a
+bareword hash key as C<< %hash = ( grep => 'foo') >>.  We don't want
+to test those types of elements because they don't represent function
+calls to C<grep>.  So we use one of handy utility functions from
+L<Perl::Critic::Utils|Perl::Critic::Utils> to make sure that this
+"grep" is actually in the right context.  (The C<is_function_call()>
+subroutine is brought in via the C<:classification> tag.)
 
         return if ! is_function_call($elem);
 
@@ -217,11 +216,10 @@ C<snext_sibling> stands for "significant").
 In Perl, the parenthesis around argument lists are usually optional,
 and PPI packs the elements into a
 L<PPI::Structure::List|PPI::Structure::List> object when parentheses
-are used.  So if the sibling is a
-C<PPI::Structure::List|PPI::Structure::List>, we pull out the first
-(significant) child of that list.  This child will be the first
-argument to C<grep>.  If parentheses were not used, then the sibling
-itself is the first argument.
+are used.  So if the sibling is a C<PPI::Structure::List>, we pull out
+the first (significant) child of that list.  This child will be the
+first argument to C<grep>.  If parentheses were not used, then the
+sibling itself is the first argument.
 
         my $arg = $sib->isa('PPI::Structure::List') ? $sib->schild(0) : $sib;
 
@@ -317,7 +315,9 @@ returns a boolean stating whether the Policy should continue to be
 enabled.  Generally, the only reason to return C<$FALSE> is when some
 external requirement is missing.  For example,
 L<Perl::Critic::Policy::CodeLayout::RequireTidyCode|Perl::Critic::Policy::CodeLayout::RequireTidyCode>
-disables itself if L<Perl::Tidy|Perl::Tidy> is not installed.
+used to disable itself if L<Perl::Tidy|Perl::Tidy> was not installed
+(that is until we made it no longer optional for the Perl-Critic
+distribution).
 
 A basic, do-nothing implementation of C<initialize_if_enabled()> would
 be:
@@ -922,6 +922,20 @@ L<Perl::Critic::Policy::TestingAndDebugging::RequireUseWarnings|Perl::Critic::Po
 for examples.
 
 
+=head2 C<is_safe()>
+
+Most L<Perl::Critic> Policies are purely I<static>.  In other words,
+they never compile or execute any of the source code that they
+analyze.  However it is possible to write I<dynamic> Policies that do
+compile or execute code, which may result in unsafe operations (see
+L<Perl::Critic::Dynamic|Perl::Critic::Dynamic> for an example).  So
+the C<is_safe()> method is used to indicate whether a Policy can be
+trusted to not cause mischief.  By default, C<is_safe()> returns true.
+But if you are writing a Policy that will compile or execute any of
+the source code that it analyzes, then you should override the
+C<is_safe()> method to return false.
+
+
 =head1 DISTRIBUTING YOUR POLICIES
 
 =head2 Create a Distribution
@@ -976,12 +990,12 @@ A typical implementation will look like:
 
     =item L<Perl::Critic::Policy::Documentation::Example|Perl::Critic::Policy::Documentation::Example>
 
-    Complains about some example documentation issues.  [Severity: 3]
+    Complains about some example documentation issues.  [Default severity: 3]
 
 
     =item L<Perl::Critic::Policy::Variables::Example|Perl::Critic::Policy::Variables::Example>
 
-    All modules must have at least one variable.  [Severity: 3]
+    All modules must have at least one variable.  [Default severity: 3]
 
 
     =back
@@ -1033,6 +1047,10 @@ only to say:
 
     This Policy is not configurable except for the standard options.
 
+=head1 TESTING YOUR POLICY
+
+The L<Perl::Critic> distribution also contains a framework for testing your
+Policy.  See L<Test::Perl::Critic::Policy> for the details.
 
 =head1 HINT
 
@@ -1050,25 +1068,31 @@ and
 
 to see the differences between the two cases.
 
-Alternatively, see
-L<ppi_dumper|http://search.cpan.org/dist/App-PPI-Dumper/script/ppi_dumper>
-and
-L<PPI::Tester|http://search.cpan.org/dist/PPI-Tester/lib/PPI/Tester.pm>.
+Alternatively, see the C<ppi_dumper> documentation at
+L<http://search.cpan.org/dist/App-PPI-Dumper/script/ppi_dumper>
+and the C<PPI::Tester> documentation at
+L<http://search.cpan.org/dist/PPI-Tester/lib/PPI/Tester.pm>.
 
 
 =head1 VERSION
 
-This is part of L<Perl::Critic|Perl::Critic> version 1.096.
+This is part of L<Perl::Critic|Perl::Critic> version 1.110.
+
+
+=head1 SEE ALSO
+
+Chas. Owens has a blog post about developing in-house policies at
+L<http://svok.blogspot.com/2009/09/adding-house-policies-to-perlcritic.html>.
 
 
 =head1 AUTHOR
 
-Jeffrey Ryan Thalhammer <thaljef@cpan.org>
+Jeffrey Ryan Thalhammer <jeff@imaginative-software.com>
 
 
 =head1 COPYRIGHT
 
-Copyright (c) 2005-2009 Jeffrey Ryan Thalhammer.  All rights reserved.
+Copyright (c) 2005-2010 Imaginative Software Systems.  All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

@@ -15,23 +15,20 @@ use English qw< -no_match_vars >;
 use Readonly;
 use Carp qw< confess >;
 
-use Test::More tests => 62;
+
+use Perl::Critic::Utils::POD qw< :all >;
+
+
+use Test::More tests => 61;
 
 #-----------------------------------------------------------------------------
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
 Readonly::Scalar my $EXCEPTION_MESSAGE_REGEX =>
     qr<malformed [ ] name [ ] section>xmsi;
-
-#-----------------------------------------------------------------------------
-
-BEGIN {
-    use_ok('Perl::Critic::Utils::POD', qw< :all >)
-        or confess 'No point in continuing.';
-}
 
 
 can_ok('main', 'get_pod_file_for_module');
@@ -693,7 +690,7 @@ sub _test_exception_from_get_module_abstract_from_string {
 
 #-----------------------------------------------------------------------------
 
-# ensure we run true if this test is loaded by
+# ensure we return true if this test is loaded by
 # t/05_utils_pod.t_without_optional_dependencies.t
 1;
 

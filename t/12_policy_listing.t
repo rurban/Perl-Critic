@@ -21,7 +21,7 @@ use Test::More;
 
 #-----------------------------------------------------------------------------
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -52,7 +52,7 @@ for my $line ( @listing_lines ) {
 
 #-----------------------------------------------------------------------------
 
-# ensure we run true if this test is loaded by
+# ensure we return true if this test is loaded by
 # t/12_policylisting.t_without_optional_dependencies.t
 1;
 

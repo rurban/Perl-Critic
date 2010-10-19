@@ -15,7 +15,7 @@ use Readonly;
 use Perl::Critic::Utils qw{ :severities :classification };
 use base 'Perl::Critic::Policy';
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -50,6 +50,8 @@ __END__
 
 =pod
 
+=for stopwords autodie
+
 =head1 NAME
 
 Perl::Critic::Policy::InputOutput::RequireCheckedClose - Write C<< my $error = close $fh; >> instead of C<< close $fh; >>.
@@ -74,8 +76,9 @@ successful.
     use autodie qw< :io >;
     close $filehandle;                               # ok
 
-You can use L<autodie>, L<Fatal>, or L<Fatal::Exception> to get around
-this.  Currently, L<autodie> is not properly treated as a pragma; its
+You can use L<autodie|autodie>, L<Fatal|Fatal>, or
+L<Fatal::Exception|Fatal::Exception> to get around
+this.  Currently, L<autodie|autodie> is not properly treated as a pragma; its
 lexical effects aren't taken into account.
 
 
@@ -91,11 +94,11 @@ Andrew Moore <amoore@mooresystems.com>
 =head1 ACKNOWLEDGMENTS
 
 This policy module is based heavily on policies written by Jeffrey
-Ryan Thalhammer <thaljef@cpan.org>.
+Ryan Thalhammer <jeff@imaginative-software.com>.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2007-2009 Andrew Moore.  All rights reserved.
+Copyright (c) 2007-2010 Andrew Moore.  All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

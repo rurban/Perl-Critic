@@ -17,7 +17,7 @@ use List::MoreUtils qw(any);
 use Perl::Critic::Utils qw{ :characters :severities :data_conversion };
 use base 'Perl::Critic::Policy';
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -173,7 +173,7 @@ character.  It defaults to off; to turn it on put the following in
 your F<.perlcriticrc> file:
 
     [ValuesAndExpressions::ProhibitInterpolationOfLiterals]
-    allow_double_quote_if_string_contains_single = 1
+    allow_if_string_contains_single_quote = 1
 
 
 =head1 SEE ALSO
@@ -182,11 +182,11 @@ L<Perl::Critic::Policy::ValuesAndExpressions::RequireInterpolationOfMetachars|Pe
 
 =head1 AUTHOR
 
-Jeffrey Ryan Thalhammer <thaljef@cpan.org>
+Jeffrey Ryan Thalhammer <jeff@imaginative-software.com>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2005-2009 Jeffrey Ryan Thalhammer.  All rights reserved.
+Copyright (c) 2005-2010 Imaginative Software Systems.  All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

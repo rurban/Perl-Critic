@@ -13,19 +13,23 @@ use warnings;
 
 use Carp qw< confess >;
 
-use PPI::Document;
-use PPI::Document::File;
-
 use List::Util qw< reduce >;
-use Scalar::Util qw< blessed weaken >;
+use Scalar::Util qw< blessed refaddr weaken >;
 use version;
 
+use PPI::Document;
+use PPI::Document::File;
+use PPIx::Utilities::Node qw< split_ppi_node_by_namespace >;
+
 use Perl::Critic::Annotation;
-use Perl::Critic::Exception::Parse qw{ throw_parse };
+use Perl::Critic::Exception::Parse qw< throw_parse >;
+use Perl::Critic::Utils qw< :booleans :characters shebang_line >;
+
+use PPIx::Regexp 0.010 qw< >;
 
 #-----------------------------------------------------------------------------
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -41,26 +45,74 @@ sub AUTOLOAD {  ## no critic (ProhibitAutoloading,ArgUnpacking)
 
 sub new {
     my ($class, @args) = @_;
+
     my $self = bless {}, $class;
-    return $self->_init(@args);
+
+    $self->_init_common();
+    $self->_init_from_external_source(@args);
+
+    return $self;
 }
 
 #-----------------------------------------------------------------------------
 
-sub _init {
+sub _new_for_parent_document {
+    my ($class, $ppi_document, $parent_document) = @_;
 
-    my ($self, $source_code) = @_;
+    my $self = bless {}, $class;
+
+    $self->_init_common();
+
+    $self->{_doc}       = $ppi_document;
+    $self->{_is_module} = $parent_document->is_module();
+
+    return $self;
+}
+
+#-----------------------------------------------------------------------------
+
+sub _init_common {
+    my ($self) = @_;
+    my %args;
+
+    $self->{_annotations} = [];
+    $self->{_suppressed_violations} = [];
+    $self->{_disabled_line_map} = {};
+
+    return;
+}
+
+#-----------------------------------------------------------------------------
+
+sub _init_from_external_source { ## no critic (Subroutines::RequireArgUnpacking)
+    my $self = shift;
+    my %args;
+
+    if (@_ == 1) {
+        warnings::warnif(
+            'deprecated',
+            'Perl::Critic::Document->new($source) deprecated, use Perl::Critic::Document->new(-source => $source) instead.' ## no critic (ValuesAndExpressions::RequireInterpolationOfMetachars)
+        );
+        %args = ('-source' => shift);
+    } else {
+        %args = @_;
+    }
+
+    my $source_code = $args{'-source'};
 
     # $source_code can be a file name, or a reference to a
     # PPI::Document, or a reference to a scalar containing source
     # code.  In the last case, PPI handles the translation for us.
 
-    my $doc = _is_ppi_doc( $source_code ) ? $source_code
-              : ref $source_code ? PPI::Document->new($source_code)
-              : PPI::Document::File->new($source_code);
+    my $ppi_document =
+        _is_ppi_doc($source_code)
+            ? $source_code
+            : ref $source_code
+                ? PPI::Document->new($source_code)
+                : PPI::Document::File->new($source_code);
 
     # Bail on error
-    if ( not defined $doc ) {
+    if (not defined $ppi_document) {
         my $errstr   = PPI::Document::errstr();
         my $file     = ref $source_code ? undef : $source_code;
         throw_parse
@@ -68,14 +120,13 @@ sub _init {
             file_name   => $file;
     }
 
-    $self->{_doc} = $doc;
-    $self->{_annotations} = [];
-    $self->{_suppressed_violations} = [];
-    $self->{_disabled_line_map} = {};
+    $self->{_doc} = $ppi_document;
     $self->index_locations();
     $self->_disable_shebang_fix();
+    $self->{_forced_filename} = $args{'-forced-filename'};
+    $self->{_is_module} = $self->_determine_is_module(\%args);
 
-    return $self;
+    return;
 }
 
 #-----------------------------------------------------------------------------
@@ -166,10 +217,50 @@ sub find_any {
 
 #-----------------------------------------------------------------------------
 
+sub namespaces {
+    my ($self) = @_;
+
+    return keys %{ $self->_nodes_by_namespace() };
+}
+
+#-----------------------------------------------------------------------------
+
+sub subdocuments_for_namespace {
+    my ($self, $namespace) = @_;
+
+    my $subdocuments = $self->_nodes_by_namespace()->{$namespace};
+
+    return $subdocuments ? @{$subdocuments} : ();
+}
+
+#-----------------------------------------------------------------------------
+
+sub ppix_regexp_from_element {
+    my ( $self, $element ) = @_;
+
+    if ( blessed( $element ) && $element->isa( 'PPI::Element' ) ) {
+        my $addr = refaddr( $element );
+        return $self->{_ppix_regexp_from_element}{$addr}
+            if exists $self->{_ppix_regexp_from_element}{$addr};
+        return ( $self->{_ppix_regexp_from_element}{$addr} =
+            PPIx::Regexp->new( $element ) );
+    } else {
+        return PPIx::Regexp->new( $element );
+    }
+}
+
+#-----------------------------------------------------------------------------
+
 sub filename {
     my ($self) = @_;
-    my $doc = $self->{_doc};
-    return $doc->can('filename') ? $doc->filename() : undef;
+
+    if ($self->{_forced_filename}) {
+        return $self->{_forced_filename};
+    }
+    else {
+        my $doc = $self->{_doc};
+        return $doc->can('filename') ? $doc->filename() : undef;
+    }
 }
 
 #-----------------------------------------------------------------------------
@@ -201,8 +292,8 @@ sub highest_explicit_perl_version {
             # that's enough for here.
             $highest_explicit_perl_version =
                 reduce { $a >= $b ? $a : $b }
-                map { version->new( $_->version() ) }
-                @{$includes};
+                map    { version->new( $_->version() ) }
+                       @{$includes};
         }
         else {
             $highest_explicit_perl_version = undef;
@@ -214,6 +305,14 @@ sub highest_explicit_perl_version {
 
     return $highest_explicit_perl_version if $highest_explicit_perl_version;
     return;
+}
+
+#-----------------------------------------------------------------------------
+
+sub uses_module {
+    my ($self, $module_name) = @_;
+
+    return exists $self->_modules_used()->{$module_name};
 }
 
 #-----------------------------------------------------------------------------
@@ -292,6 +391,22 @@ sub suppressed_violations {
 }
 
 #-----------------------------------------------------------------------------
+
+sub is_program {
+    my ($self) = @_;
+
+    return not $self->is_module();
+}
+
+#-----------------------------------------------------------------------------
+
+sub is_module {
+    my ($self) = @_;
+
+    return $self->{_is_module};
+}
+
+#-----------------------------------------------------------------------------
 # PRIVATE functions & methods
 
 sub _is_a_version_statement {
@@ -305,7 +420,6 @@ sub _is_a_version_statement {
 #-----------------------------------------------------------------------------
 
 sub _caching_finder {
-
     my $cache_ref = shift;  # These vars will persist for the life
     my %isa_cache = ();     # of the code ref that this sub returns
 
@@ -342,9 +456,9 @@ sub _caching_finder {
 sub _disable_shebang_fix {
     my ($self) = @_;
 
-    # When you install a script using ExtUtils::MakeMaker or Module::Build, it
+    # When you install a program using ExtUtils::MakeMaker or Module::Build, it
     # inserts some magical code into the top of the file (just after the
-    # shebang).  This code allows people to call your script using a shell,
+    # shebang).  This code allows people to call your program using a shell,
     # like `sh my_script`.  Unfortunately, this code causes several Policy
     # violations, so we disable them as if they had "## no critic" annotations.
 
@@ -354,7 +468,7 @@ sub _disable_shebang_fix {
     # fixing strings.  This matches most of the ones I've found in my own Perl
     # distribution, but it may not be bullet-proof.
 
-    my $fixin_rx = qr<^eval 'exec .* \$0 \${1\+"\$@"}'\s*[\r\n]\s*if.+;>ms; ## no critic (ExtendedFormatting)
+    my $fixin_rx = qr<^eval 'exec .* \$0 \${1[+]"\$@"}'\s*[\r\n]\s*if.+;>ms; ## no critic (ExtendedFormatting)
     if ( $first_stmnt =~ $fixin_rx ) {
         my $line = $first_stmnt->location->[0];
         $self->{_disabled_line_map}->{$line}->{ALL} = 1;
@@ -362,6 +476,86 @@ sub _disable_shebang_fix {
     }
 
     return $self;
+}
+
+#-----------------------------------------------------------------------------
+
+sub _determine_is_module {
+    my ($self, $args) = @_;
+
+    my $file_name = $self->filename();
+    if (
+            defined $file_name
+        and ref $args->{'-program-extensions'} eq 'ARRAY'
+    ) {
+        foreach my $ext ( @{ $args->{'-program-extensions'} } ) {
+            my $regex =
+                ref $ext eq 'Regexp'
+                    ? $ext
+                    : qr< @{ [ quotemeta $ext ] } \z >xms;
+
+            return $FALSE if $file_name =~ m/$regex/smx;
+        }
+    }
+
+    return $FALSE if shebang_line($self);
+    return $FALSE if defined $file_name && $file_name =~ m/ [.] PL \z /smx;
+
+    return $TRUE;
+}
+
+#-----------------------------------------------------------------------------
+
+sub _nodes_by_namespace {
+    my ($self) = @_;
+
+    my $nodes = $self->{_nodes_by_namespace};
+
+    return $nodes if $nodes;
+
+    my $ppi_document = $self->ppi_document();
+    if (not $ppi_document) {
+        return $self->{_nodes_by_namespace} = {};
+    }
+
+    my $raw_nodes_map = split_ppi_node_by_namespace($ppi_document);
+
+    my %wrapped_nodes;
+    while ( my ($namespace, $raw_nodes) = each %{$raw_nodes_map} ) {
+        $wrapped_nodes{$namespace} = [
+            map { __PACKAGE__->_new_for_parent_document($_, $self) }
+                @{$raw_nodes}
+        ];
+    }
+
+    return $self->{_nodes_by_namespace} = \%wrapped_nodes;
+}
+
+#-----------------------------------------------------------------------------
+
+# Note: must use exists on return value to determine membership because all
+# the values are false, unlike the result of hashify().
+sub _modules_used {
+    my ($self) = @_;
+
+    my $mapping = $self->{_modules_used};
+
+    return $mapping if $mapping;
+
+    my $includes = $self->find('PPI::Statement::Include');
+    if (not $includes) {
+        return $self->{_modules_used} = {};
+    }
+
+    my %mapping;
+    for my $module (
+        grep { $_ } map  { $_->module() || $_->pragma() } @{$includes}
+    ) {
+        # Significanly ess memory than $h{$k} => 1.  Thanks Mr. Lembark.
+        $mapping{$module} = ();
+    }
+
+    return $self->{_modules_used} = \%mapping;
 }
 
 #-----------------------------------------------------------------------------
@@ -384,7 +578,7 @@ Perl::Critic::Document - Caching wrapper around a PPI::Document.
     use PPI::Document;
     use Perl::Critic::Document;
     my $doc = PPI::Document->new('Foo.pm');
-    $doc = Perl::Critic::Document->new($doc);
+    $doc = Perl::Critic::Document->new(-source => $doc);
     ## Then use the instance just like a PPI::Document
 
 
@@ -411,16 +605,40 @@ Perhaps there is a CPAN module out there which implements a facade
 better than we do here?
 
 
+=head1 INTERFACE SUPPORT
+
+This is considered to be a public class.  Any changes to its interface
+will go through a deprecation cycle.
+
+
 =head1 CONSTRUCTOR
 
 =over
 
-=item C<< new($source_code) >>
+=item C<< new(-source => $source_code, '-forced-filename' => $filename, '-program-extensions' => [program_extensions]) >>
 
 Create a new instance referencing a PPI::Document instance.  The
 C<$source_code> can be the name of a file, a reference to a scalar
-containing actual source code, or a L<PPI::Document> or
-L<PPI::Document::File>.
+containing actual source code, or a L<PPI::Document|PPI::Document> or
+L<PPI::Document::File|PPI::Document::File>.
+
+In the event that C<$source_code> is a reference to a scalar containing
+actual source code or a L<PPI::Document|PPI::Document>, the resulting
+L<Perl::Critic::Document|Perl::Critic::Document> will not have a filename.
+This may cause L<Perl::Critic::Document|Perl::Critic::Document> to incorrectly
+classify the source code as a module or script.  To avoid this problem, you
+can optionally set the C<-forced-filename> to force the L<Perl::Critic::Document|Perl::Critic::Document>
+to have a particular C<$filename>.  Do not use this option if C<$source_code>
+is already the name of a file, or is a reference to a L<PPI::Document::File|PPI::Document::File>.
+
+The '-program-extensions' argument is optional, and is a reference to a list
+of strings and/or regular expressions. The strings will be made into regular
+expressions matching the end of a file name, and any document whose file name
+matches one of the regular expressions will be considered a program.
+
+If -program-extensions is not specified, or if it does not determine the
+document type, the document will be considered to be a program if the source
+has a shebang line or its file name (if any) matches C<< m/ [.] PL \z /smx >>.
 
 =back
 
@@ -442,9 +660,38 @@ date.
 
 =item C<< find_any($wanted) >>
 
-If C<$wanted> is a simple PPI class name, then the cache is employed.
-Otherwise we forward the call to the corresponding method of the
-C<PPI::Document> instance.
+Caching wrappers around the PPI methods.  If C<$wanted> is a simple PPI class
+name, then the cache is employed. Otherwise we forward the call to the
+corresponding method of the C<PPI::Document> instance.
+
+
+=item C<< namespaces() >>
+
+Returns a list of the namespaces (package names) in the document.
+
+
+=item C<< subdocuments_for_namespace($namespace) >>
+
+Returns a list of sub-documents containing the elements in the given
+namespace.  For example, given that the current document is for the source
+
+    foo();
+    package Foo;
+    package Bar;
+    package Foo;
+
+this method will return two L<Perl::Critic::Document|Perl::Critic::Document>s
+for a parameter of C<"Foo">.  For more, see
+L<PPIx::Utilities::Node/split_ppi_node_by_namespace>.
+
+
+=item C<< ppix_regexp_from_element($element) >>
+
+Caching wrapper around C<< PPIx::Regexp->new($element) >>.  If
+C<$element> is a C<PPI::Element> the cache is employed, otherwise it
+just returns the results of C<< PPIx::Regexp->new() >>.  In either case,
+it returns C<undef> unless the argument is something that
+L<PPIx::Regexp|PPIx::Regexp> actually understands.
 
 
 =item C<< filename() >>
@@ -466,24 +713,37 @@ Returns a L<version|version> object for the highest Perl version
 requirement declared in the document via a C<use> or C<require>
 statement.  Returns nothing if there is no version statement.
 
+
+=item C<< uses_module($module_or_pragma_name) >>
+
+Answers whether there is a C<use>, C<require>, or C<no> of the given name in
+this document.  Note that there is no differentiation of modules vs. pragmata
+here.
+
+
 =item C<< process_annotations() >>
 
 Causes this Document to scan itself and mark which lines &
 policies are disabled by the C<"## no critic"> annotations.
+
 
 =item C<< line_is_disabled_for_policy($line, $policy_object) >>
 
 Returns true if the given C<$policy_object> or C<$policy_name> has
 been disabled for at C<$line> in this Document.  Otherwise, returns false.
 
+
 =item C<< add_annotation( $annotation ) >>
 
 Adds an C<$annotation> object to this Document.
 
+
 =item C<< annotations() >>
 
-Returns a list containing all the L<Perl::Critic::Annotation> that
+Returns a list containing all the
+L<Perl::Critic::Annotation|Perl::Critic::Annotation>s that
 were found in this Document.
+
 
 =item C<< add_suppressed_violation($violation) >>
 
@@ -491,10 +751,22 @@ Informs this Document that a C<$violation> was found but not reported
 because it fell on a line that had been suppressed by a C<"## no critic">
 annotation. Returns C<$self>.
 
+
 =item C<< suppressed_violations() >>
 
-Returns a list of references to all the L<Perl::Critic::Violation>s
+Returns a list of references to all the
+L<Perl::Critic::Violation|Perl::Critic::Violation>s
 that were found in this Document but were suppressed.
+
+
+=item C<< is_program() >>
+
+Returns whether this document is considered to be a program.
+
+
+=item C<< is_module() >>
+
+Returns whether this document is considered to be a Perl module.
 
 =back
 
@@ -504,7 +776,7 @@ Chris Dolan <cdolan@cpan.org>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2006-2009 Chris Dolan.
+Copyright (c) 2006-2010 Chris Dolan.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

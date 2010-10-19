@@ -2,7 +2,6 @@
 ^README\.developer$
 ^README\.release$
 \.PPI$
-^lib/Perl/Critic/PolicySummary.pod$
 _without_optional_dependencies.t$
 ^t/ControlStructures/ProhibitNegativeExpressionsInUnlessAndUntilConditions.run$
 ^t/NamingConventions/Capitalization.run$
@@ -16,6 +15,7 @@ CVS
 RCS
 ,v$
 \.svn
+\.git
 
 # Distribution files
 \.zip$
@@ -81,3 +81,4 @@ RCS
 
 # Some other junk
 ^Debian_CPANTS\.txt$
+^MYMETA.yml$

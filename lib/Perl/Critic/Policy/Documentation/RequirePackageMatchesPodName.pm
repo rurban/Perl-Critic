@@ -8,19 +8,22 @@
 package Perl::Critic::Policy::Documentation::RequirePackageMatchesPodName;
 
 use 5.006001;
+
 use strict;
 use warnings;
-use Readonly;
 
+use Readonly;
+use English qw{ -no_match_vars };
 use Perl::Critic::Utils qw{ :severities :classification };
 use base 'Perl::Critic::Policy';
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
 Readonly::Scalar my $PKG_RX => qr{ [[:alpha:]](?:[\w:\']*\w)? }xms;
-Readonly::Scalar my $DESC => q{Pod NAME does not match the package declaration};
+Readonly::Scalar my $DESC =>
+    q{Pod NAME on line %d does not match the package declaration};
 Readonly::Scalar my $EXPL => q{};
 
 #-----------------------------------------------------------------------------
@@ -35,8 +38,8 @@ sub applies_to           { return 'PPI::Document'         }
 sub prepare_to_scan_document {
     my ( $self, $document ) = @_;
 
-    # idea: force NAME to match the file name in scripts?
-    return not is_script($document); # mismatch is normal in program entry points
+    # idea: force NAME to match the file name in programs?
+    return $document->is_module(); # mismatch is normal in program entry points
 }
 
 sub violates {
@@ -51,23 +54,28 @@ sub violates {
 
         next if $content !~ m{^=head1 [ \t]+ NAME [ \t]*$ \s*}cgxms;
 
+        my $line_number = $pod->line_number() + (
+            substr( $content, 0, $LAST_MATCH_START[0] + 1 ) =~ tr/\n/\n/ );
+
         my ($pod_pkg) = $content =~ m{\G (\S+) }cgxms;
 
         if (!$pod_pkg) {
-            return $self->violation( $DESC, q{Empty name declaration}, $elem );
+            return $self->violation( sprintf( $DESC, $line_number ),
+                q{Empty name declaration}, $pod );
         }
 
         # idea: worry about POD escapes?
         $pod_pkg =~ s{\A [CL]<(.*)>\z}{$1}gxms; # unwrap
         $pod_pkg =~ s{\'}{::}gxms;              # perl4 -> perl5
 
-        my $pkgs = $doc->find('PPI::Statement::Package');
-        # no package statement means no possible match
-        my $pkg = $pkgs ? $pkgs->[0]->namespace : q{};
-        $pkg =~ s{\'}{::}gxms;
+        foreach my $stmt ( @{ $doc->find('PPI::Statement::Package') || [] } ) {
+            my $pkg = $stmt->namespace();
+            $pkg =~ s{\'}{::}gxms;
+            return if $pkg eq $pod_pkg;
+        }
 
-        return if $pkg eq $pod_pkg;
-        return $self->violation( $DESC, $EXPL, $pod );
+        return $self->violation( sprintf( $DESC, $line_number ),
+            $EXPL, $pod );
     }
 
     return;  # no NAME section found
@@ -106,7 +114,7 @@ Chris Dolan <cdolan@cpan.org>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2008-2009 Chris Dolan
+Copyright (c) 2008-2010 Chris Dolan
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

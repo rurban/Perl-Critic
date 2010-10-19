@@ -17,7 +17,7 @@ use Perl::Critic::Utils qw< hashify >;
 
 use overload ( q<""> => 'to_string' );
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -64,6 +64,12 @@ This is a helper class that gathers the themes of the installed
 Policies.  There are no user-serviceable parts here.
 
 
+=head1 INTERFACE SUPPORT
+
+This is considered to be a non-public class.  Its interface is subject
+to change without notice.
+
+
 =head1 CONSTRUCTOR
 
 =over
@@ -102,12 +108,12 @@ the constructor of this C<ThemeListing>.
 
 =head1 AUTHOR
 
-Jeffrey Ryan Thalhammer <thaljef@cpan.org>
+Jeffrey Ryan Thalhammer <jeff@imaginative-software.com>
 
 
 =head1 COPYRIGHT
 
-Copyright (c) 2005-2009 Jeffrey Ryan Thalhammer.  All rights reserved.
+Copyright (c) 2005-2010 Imaginative Software Systems.  All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

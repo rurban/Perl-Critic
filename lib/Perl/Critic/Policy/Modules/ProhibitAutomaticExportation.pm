@@ -16,7 +16,7 @@ use Perl::Critic::Utils qw{ :severities };
 use List::MoreUtils qw(any);
 use base 'Perl::Critic::Policy';
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -47,9 +47,11 @@ sub violates {
 
 sub _uses_exporter {
     my ($doc) = @_;
+
     my $includes_ref = $doc->find('PPI::Statement::Include');
-    return if !$includes_ref;
-    #This covers both C<use Exporter;> and C<use base 'Exporter';>
+    return if not $includes_ref;
+
+    # This covers both C<use Exporter;> and C<use base 'Exporter';>
     return scalar grep { m/ \b Exporter \b/xms }  @{ $includes_ref };
 }
 
@@ -57,7 +59,10 @@ sub _uses_exporter {
 
 sub _has_exports {
     my ($doc) = @_;
-    my $wanted = sub {_our_export(@_) || _vars_export(@_) || _package_export(@_)};
+
+    my $wanted =
+        sub { _our_export(@_) or _vars_export(@_) or _package_export(@_) };
+
     return $doc->find_first( $wanted );
 }
 
@@ -65,8 +70,10 @@ sub _has_exports {
 
 sub _our_export {
     my (undef, $elem) = @_;
-    $elem->isa('PPI::Statement::Variable') || return 0;
-    $elem->type() eq 'our' || return 0;
+
+    $elem->isa('PPI::Statement::Variable') or return 0;
+    $elem->type() eq 'our' or return 0;
+
     return any { $_ eq '@EXPORT' } $elem->variables(); ## no critic(RequireInterpolationOfMetachars)
 }
 
@@ -74,8 +81,10 @@ sub _our_export {
 
 sub _vars_export {
     my (undef, $elem) = @_;
-    $elem->isa('PPI::Statement::Include') || return 0;
-    $elem->pragma() eq 'vars' || return 0;
+
+    $elem->isa('PPI::Statement::Include') or return 0;
+    $elem->pragma() eq 'vars' or return 0;
+
     return $elem =~ m{ \@EXPORT \b }xms; #Crude, but usually works
 }
 
@@ -83,7 +92,9 @@ sub _vars_export {
 
 sub _package_export {
     my (undef, $elem) = @_;
-    $elem->isa('PPI::Token::Symbol') || return 0;
+
+    $elem->isa('PPI::Token::Symbol') or return 0;
+
     return $elem =~ m{ \A \@ \S+ ::EXPORT \z }xms;
     #TODO: ensure that it is in _this_ package!
 }
@@ -119,9 +130,9 @@ and let the caller choose exactly which symbols to export.
     package Foo;
 
     use base qw(Exporter);
-    our @EXPORT      = qw(&foo &bar);                  # not ok
-    our @EXPORT_OK   = qw(&foo &bar);                  # ok
-    our %EXPORT_TAGS = ( all => [ qw(&foo &bar) ] );   # ok
+    our @EXPORT      = qw(foo $bar @baz);                  # not ok
+    our @EXPORT_OK   = qw(foo $bar @baz);                  # ok
+    our %EXPORT_TAGS = ( all => [ qw(foo $bar @baz) ] );   # ok
 
 
 =head1 CONFIGURATION
@@ -131,12 +142,12 @@ This Policy is not configurable except for the standard options.
 
 =head1 AUTHOR
 
-Jeffrey Ryan Thalhammer <thaljef@cpan.org>
+Jeffrey Ryan Thalhammer <jeff@imaginative-software.com>
 
 
 =head1 COPYRIGHT
 
-Copyright (c) 2005-2009 Jeffrey Ryan Thalhammer.  All rights reserved.
+Copyright (c) 2005-2010 Imaginative Software Systems.  All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

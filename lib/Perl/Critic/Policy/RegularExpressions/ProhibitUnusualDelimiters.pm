@@ -16,10 +16,10 @@ use English qw(-no_match_vars);
 use Carp;
 
 use Perl::Critic::Utils qw{ :booleans :severities hashify };
-use Perl::Critic::Utils::PPIRegexp qw{ get_delimiters };
+
 use base 'Perl::Critic::Policy';
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -68,7 +68,7 @@ sub violates {
     my ( $self, $elem, undef ) = @_;
 
     my $allowed_delimiters = $self->{_allowed_delimiters};
-    foreach my $delimiter (get_delimiters($elem)) {
+    foreach my $delimiter ($elem->get_delimiters()) {
         next if $allowed_delimiters->{$delimiter};
         return $self->violation( $DESC, $EXPL, $elem );
     }
@@ -127,7 +127,7 @@ Chris Dolan <cdolan@cpan.org>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2007-2009 Chris Dolan.  Many rights reserved.
+Copyright (c) 2007-2010 Chris Dolan.  Many rights reserved.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

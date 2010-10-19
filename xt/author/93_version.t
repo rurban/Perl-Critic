@@ -19,7 +19,7 @@ use Test::More;
 
 #-----------------------------------------------------------------------------
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -43,12 +43,12 @@ sub check_version {
     # Skip POD
     $content =~ s/^__END__.*//xms;
 
-    # only look at perl scripts, not sh scripts
+    # only look at perl programs, not sh scripts
     return if (m{blib/script/}xms && $content !~ m/\A \#![^\r\n]+?perl/xms);
 
-    my @version_lines = $content =~ m/ ( [^\n]* \$VERSION [^\n]* ) /gxms;
+    my @version_lines = $content =~ m/ ( [^\n]* \$VERSION\b [^\n]* ) /gxms;
     # Special cases for printing/documenting version numbers
-    @version_lines = grep {! m/(?:\\|\"|\'|C<|v)\$VERSION/xms} @version_lines;
+    @version_lines = grep {! m/(?:[\\\"\'v]|C<)\$VERSION/xms} @version_lines;
     @version_lines = grep {! m/^\s*\#/xms} @version_lines;
     if (@version_lines == 0) {
         fail($_);

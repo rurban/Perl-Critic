@@ -1,8 +1,8 @@
 ##############################################################################
-#      $URL: http://perlcritic.tigris.org/svn/perlcritic/trunk/Perl-Critic/lib/Perl/Critic/Utils/DataConversion.pm $
-#     $Date: 2007-09-02 21:31:09 -0500 (Sun, 02 Sep 2007) $
-#   $Author: clonezone $
-# $Revision: 1859 $
+#      $URL$
+#     $Date$
+#   $Author$
+# $Revision$
 ##############################################################################
 
 package Perl::Critic::Utils::DataConversion;
@@ -16,7 +16,7 @@ use Perl::Critic::Utils qw{ :characters :booleans };
 
 use base 'Exporter';
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -66,6 +66,12 @@ Perl::Critic::Utils::DataConversion - Utilities for converting from one type of 
 Provides data conversion functions.
 
 
+=head1 INTERFACE SUPPORT
+
+This is considered to be a public module.  Any changes to its
+interface will go through a deprecation cycle.
+
+
 =head1 IMPORTABLE SUBS
 
 =over
@@ -102,7 +108,7 @@ Elliot Shank <perl@galumph.com>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2007-2009 Elliot Shank.  All rights reserved.
+Copyright (c) 2007-2010 Elliot Shank.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

@@ -22,7 +22,7 @@ use Perl::Critic::BuildUtilities qw{ recommended_module_versions };
 
 #-----------------------------------------------------------------------------
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -76,20 +76,9 @@ our \$VERSION = $VERSION;
 
 #-----------------------------------------------------------------------------
 
-my \$module_loaded = eval <<'END_HIDE_MODULES';
-use Test::Without::Module qw{
+use Test::Without::Module qw<
     $modules_to_hide
-};
-1;
-END_HIDE_MODULES
-
-if ( not \$module_loaded ) {
-    print
-        '1..0 # Skip ',
-        'Test::Without::Module required to test with the ',
-        "absence of optional modules\\n";
-    exit 0;
-}
+>;
 
 
 require '$wrapped_test_name';
@@ -106,7 +95,7 @@ __END__
 
 =pod
 
-=for stopwords 
+=for stopwords
 
 =head1 NAME
 
@@ -135,7 +124,7 @@ Elliot Shank C<< <perl@galumph.org> >>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2007-2009 Elliot Shank.  All rights reserved.
+Copyright (c) 2007-2009 Elliot Shank.
 
 This program is free software; you can redistribute it and/or modify it under
 the same terms as Perl itself.  The full text of this license can be found in

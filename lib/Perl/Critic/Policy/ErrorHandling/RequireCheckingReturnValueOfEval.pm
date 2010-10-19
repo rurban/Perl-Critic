@@ -18,7 +18,7 @@ use Scalar::Util qw< refaddr >;
 use Perl::Critic::Utils qw< :booleans :characters :severities hashify >;
 use base 'Perl::Critic::Policy';
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -130,10 +130,22 @@ sub _is_in_correct_position_in_a_condition_or_foreach_loop_collection {
                 );
         }
 
-        if ( $parent->isa('PPI::Structure::ForLoop') ) {
+        # TECHNICAL DEBT: This code is basically shared with
+        # ProhibitUnusedCapture.  I don't want to put this code
+        # into Perl::Critic::Utils::*, but I don't have time to sort out
+        # PPIx::Utilities::Structure::List yet.
+        if (
+                $parent->isa('PPI::Structure::List')
+            and my $parent_statement = $parent->statement()
+        ) {
+            return $TRUE if
+                    $parent_statement->isa('PPI::Statement::Compound')
+                and $parent_statement->type() eq 'foreach';
+        }
+
+        if ( $parent->isa('PPI::Structure::For') ) {
             my @for_loop_components = $parent->schildren();
 
-            return $TRUE if 1 == @for_loop_components;
             my $condition =
                 $for_loop_components[$CONDITION_POSITION_IN_C_STYLE_FOR_LOOP]
                 or return;
@@ -208,15 +220,32 @@ sub _descendant_of {
 sub _is_in_postfix_expression {
     my ($elem) = @_;
 
-    my $previous = $elem->sprevious_sibling();
-    while ($previous) {
-        if (
-                $previous->isa('PPI::Token::Word')
-            and $POSTFIX_OPERATORS{ $previous->content() }
-        ) {
-            return $TRUE
+    my $current_base = $elem;
+    while ($TRUE) {
+        my $previous = $current_base->sprevious_sibling();
+        while ($previous) {
+            if (
+                    $previous->isa('PPI::Token::Word')
+                and $POSTFIX_OPERATORS{ $previous->content() }
+            ) {
+                return $TRUE
+            }
+            $previous = $previous->sprevious_sibling();
+        } # end while
+
+        my $parent = $current_base->parent() or return;
+        if ( $parent->isa('PPI::Statement') ) {
+            return if $parent->specialized();
+
+            my $grandparent = $parent->parent() or return;
+            return if not $grandparent->isa('PPI::Structure::List');
+
+            $current_base = $grandparent;
+        } else {
+            $current_base = $parent;
         }
-        $previous = $previous->sprevious_sibling();
+
+        return if not $current_base->isa('PPI::Structure::List');
     }
 
     return;
@@ -331,6 +360,17 @@ true value and to test that value:
 Unfortunately, you can't use the C<defined> function to test the
 result; C<eval> returns an empty string on failure.
 
+Various modules have been written to take some of the pain out of
+properly localizing and checking C<$@>/C<$EVAL_ERROR>. For example:
+
+    use Try::Tiny;
+    try {
+        ...
+    } catch {
+        # Error handling here;
+        # The exception is in $_/$ARG, not $@/$EVAL_ERROR.
+    };  # Note semicolon.
+
 "But we don't use DESTROY() anywhere in our code!" you say.  That may
 be the case, but do any of the third-party modules you use have them?
 What about any you may use in the future or updated versions of the
@@ -347,6 +387,9 @@ This Policy is not configurable except for the standard options.
 See thread on perl5-porters starting here:
 L<http://www.xray.mpe.mpg.de/mailing-lists/perl5-porters/2008-06/msg00537.html>.
 
+For a nice, easy, non-magical way of properly handling exceptions, see
+L<Try::Tiny|Try::Tiny>.
+
 
 =head1 AUTHOR
 
@@ -354,7 +397,7 @@ Elliot Shank C<< <perl@galumph.com> >>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2008-2009 Elliot Shank.  All rights reserved.
+Copyright (c) 2008-2010 Elliot Shank.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

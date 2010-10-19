@@ -15,7 +15,7 @@ use Perl::Critic::Utils;
 
 use base qw{ Perl::Critic::PolicyParameter::Behavior };
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -72,6 +72,12 @@ onto by
 L<Perl::Critic::PolicyParameter|Perl::Critic::PolicyParameter>.
 
 
+=head1 INTERFACE SUPPORT
+
+This is considered to be a non-public class.  Its interface is subject
+to change without notice.
+
+
 =head1 METHODS
 
 =over
@@ -92,7 +98,7 @@ Elliot Shank <perl@galumph.com>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2007-2009 Elliot Shank.  All rights reserved.
+Copyright (c) 2007-2010 Elliot Shank.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

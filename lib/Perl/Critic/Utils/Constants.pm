@@ -16,7 +16,7 @@ use Perl::Critic::Utils qw{ $EMPTY hashify };
 
 use base 'Exporter';
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -31,6 +31,7 @@ our @EXPORT_OK = qw{
     $PROFILE_COLOR_SEVERITY_MEDIUM_DEFAULT
     $PROFILE_COLOR_SEVERITY_LOW_DEFAULT
     $PROFILE_COLOR_SEVERITY_LOWEST_DEFAULT
+    $_MODULE_VERSION_TERM_ANSICOLOR
 };
 
 our %EXPORT_TAGS = (
@@ -75,6 +76,10 @@ Readonly::Scalar our $PROFILE_COLOR_SEVERITY_MEDIUM_DEFAULT     => $EMPTY;
 Readonly::Scalar our $PROFILE_COLOR_SEVERITY_LOW_DEFAULT        => $EMPTY;
 Readonly::Scalar our $PROFILE_COLOR_SEVERITY_LOWEST_DEFAULT     => $EMPTY;
 
+# If the following changes, the corresponding change needs to be made in
+# inc/Perl/Critic/BuildUtilities.pm, sub recommended_module_versions().
+Readonly::Scalar our $_MODULE_VERSION_TERM_ANSICOLOR => 2.02;
+
 #-----------------------------------------------------------------------------
 
 1;
@@ -95,6 +100,12 @@ Perl::Critic::Utils::Constants - Global constants.
 =head1 DESCRIPTION
 
 Defines commonly used constants for L<Perl::Critic|Perl::Critic>.
+
+
+=head1 INTERFACE SUPPORT
+
+This is considered to be a public module.  Any changes to its
+interface will go through a deprecation cycle.
 
 
 =head1 IMPORTABLE CONSTANTS
@@ -153,7 +164,7 @@ Elliot Shank <perl@galumph.com>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2007-2009 Elliot Shank.  All rights reserved.
+Copyright (c) 2007-2010 Elliot Shank.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

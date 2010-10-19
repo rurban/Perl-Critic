@@ -16,7 +16,10 @@ use Readonly;
 
 use File::Spec;
 use File::Temp;
+use IO::String qw< >;
 use List::MoreUtils qw(uniq);
+use Pod::Spell qw< >;
+use Text::ParseWords qw< >;
 
 use Perl::Critic::Utils qw{
     :characters
@@ -28,7 +31,7 @@ use Perl::Critic::Exception::Fatal::Generic qw{ throw_generic };
 
 use base 'Perl::Critic::Policy';
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -77,13 +80,7 @@ sub got_sigpipe {
 sub initialize_if_enabled {
     my ( $self, $config ) = @_;
 
-    eval {
-        require File::Which;
-        require Text::ParseWords;
-        require Pod::Spell;
-        require IO::String;
-    }
-        or return $FALSE;
+    eval { require File::Which; 1 } or return $FALSE;
 
     return $FALSE if not $self->_derive_spell_command_line();
 
@@ -144,14 +141,6 @@ sub _get_spell_command {
     return $self->{_spell_command};
 }
 
-sub _set_spell_command {
-    my ( $self, $spell_command ) = @_;
-
-    $self->{_spell_command} = $spell_command;
-
-    return;
-}
-
 #-----------------------------------------------------------------------------
 
 sub _get_spell_command_line {
@@ -208,7 +197,7 @@ sub _run_spell_command {
 
     eval {
         # temporarily add our special wordlist to this annoying global
-        local %Pod::Wordlist::Wordlist =    ##no critic(ProhibitPackageVars)
+        local %Pod::Wordlist::Wordlist =    ## no critic (ProhibitPackageVars)
             %{ $self->_get_stop_words() };
 
         Pod::Spell->new()->parse_from_filehandle($infh, $outfh);
@@ -230,7 +219,7 @@ sub _run_spell_command {
         }
 
         # Why is this extra step needed???
-        @words = grep { not exists $Pod::Wordlist::Wordlist{$_} } @words;  ## no critic(ProhibitPackageVars)
+        @words = grep { not exists $Pod::Wordlist::Wordlist{$_} } @words;  ## no critic (ProhibitPackageVars)
         1;
     }
         or do {
@@ -293,7 +282,7 @@ __END__
 
 =pod
 
-=for stopwords Hmm stopwords
+=for stopwords foobie foobie-bletch Hmm stopwords
 
 =head1 NAME
 
@@ -322,9 +311,8 @@ passing it to an external spell checker.  It skips over words you
 flagged to ignore.  If the spell checker returns any misspelled words,
 this policy emits a violation.
 
-If anything else goes wrong -- you don't have Pod::Spell installed or
-we can't locate the spell checking program or (gasp!) your module has
-no POD -- then this policy passes.
+If anything else goes wrong -- we can't locate the spell checking program or
+(gasp!) your module has no POD -- then this policy passes.
 
 To add exceptions on a module-by-module basis, add "stopwords" as
 described in L<Pod::Spell|Pod::Spell>.  For example:
@@ -375,15 +363,24 @@ together into a single list of exemptions.
 
 =head1 NOTES
 
-L<Pod::Spell|Pod::Spell> is not included with Perl::Critic, nor is a
-spell checking program.
+A spell checking program is not included with Perl::Critic.
+
+The results of failures for this policy can be confusing when F<aspell>
+complains about words containing punctuation such as hyphens and apostrophes.
+In this situation F<aspell> will often only emit part of the word that it
+thinks is misspelled.  For example, if you ask F<aspell> to check
+"foobie-bletch", the output only complains about "foobie".  Unfortunately,
+you'll have to look through your POD to figure out what the real word that
+F<aspell> is complaining about is.  One thing to try is looking at the output
+of C<< perl -MPod::Spell -e 'print
+Pod::Spell->new()->parse_from_file("lib/Your/Module.pm")' >> to see what is
+actually being checked for spelling.
 
 
 =head1 PREREQUISITES
 
-This policy will disable itself if any of the following are
-unavailable: L<File::Which|File::Which>, L<IO::String|IO::String>,
-L<Pod::Spell|Pod::Spell>, or L<Text::ParseWords|Text::ParseWords>.
+This policy will disable itself if L<File::Which|File::Which> is not
+available.
 
 
 =head1 CREDITS
@@ -399,7 +396,7 @@ Chris Dolan <cdolan@cpan.org>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2007-2009 Chris Dolan.  Many rights reserved.
+Copyright (c) 2007-2010 Chris Dolan.  Many rights reserved.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

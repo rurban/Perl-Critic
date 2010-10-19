@@ -24,7 +24,7 @@ use Test::More tests => 66;
 
 #-----------------------------------------------------------------------------
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -317,7 +317,7 @@ sub has_theme {
 
 #-----------------------------------------------------------------------------
 
-# ensure we run true if this test is loaded by
+# ensure we return true if this test is loaded by
 # t/09_theme.t_without_optional_dependencies.t
 1;
 

@@ -10,18 +10,21 @@ package Perl::Critic::Policy::ValuesAndExpressions::RequireInterpolationOfMetach
 use 5.006001;
 use strict;
 use warnings;
+
 use Readonly;
+
+use Email::Address;
 
 use Perl::Critic::Utils qw< :booleans :characters :severities >;
 use base 'Perl::Critic::Policy';
 
 #-----------------------------------------------------------------------------
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
-Readonly::Scalar my $DESC => q{String *may* require interpolation};
+Readonly::Scalar my $DESC => q<String *may* require interpolation>;
 Readonly::Scalar my $EXPL => [ 51 ];
 
 #-----------------------------------------------------------------------------
@@ -39,8 +42,10 @@ sub supported_parameters {
 
 sub default_severity     { return $SEVERITY_LOWEST      }
 sub default_themes       { return qw(core pbp cosmetic) }
-sub applies_to           { return qw(PPI::Token::Quote::Single
-                                     PPI::Token::Quote::Literal) }
+
+sub applies_to           {
+    return qw< PPI::Token::Quote::Single PPI::Token::Quote::Literal >;
+}
 
 #-----------------------------------------------------------------------------
 
@@ -63,9 +68,9 @@ sub violates {
 
     # The string() method strips off the quotes
     my $string = $elem->string();
-    return if _looks_like_use_overload( $elem );
     return if not _needs_interpolation($string);
     return if _looks_like_email_address($string);
+    return if _looks_like_use_vars($elem);
 
     my $rcs_regexes = $self->{_rcs_regexes};
     return if $rcs_regexes and _contains_rcs_variable($string, $rcs_regexes);
@@ -79,12 +84,18 @@ sub _needs_interpolation {
     my ($string) = @_;
 
     return
-            $string =~ m< [\$\@] \S+ >xmso             # Contains a $ or @
-        ||  $string =~ m<                              # Contains metachars
+            # Contains a $ or @ not followed by "{}".
+            $string =~ m< [\$\@] (?! [{] [}] ) \S+ >xms
+            # Contains metachars
+            # Note that \1 ... are not documented (that I can find), but are
+            # treated the same way as \0 by S_scan_const in toke.c, at least
+            # for regular double-quotish strings. Not, obviously, where
+            # regexes are involved.
+        ||  $string =~ m<
                 (?: \A | [^\\] )
                 (?: \\{2} )*
-                \\ [tnrfae0xcNLuLUEQ]
-            >xmso;
+                \\ [tnrfbae01234567xcNluLUEQ]
+            >xms;
 }
 
 #-----------------------------------------------------------------------------
@@ -92,7 +103,11 @@ sub _needs_interpolation {
 sub _looks_like_email_address {
     my ($string) = @_;
 
-    return $string =~ m{\A [^\@\s]+ \@ [\w\-.]+ \z}xmso;
+    return if index ($string, q<@>) < 0;
+    return if $string =~ m< \W \@ >xms;
+    return if $string =~ m< \A \@ \w+ \b >xms;
+
+    return $string =~ $Email::Address::addr_spec;
 }
 
 #-----------------------------------------------------------------------------
@@ -101,7 +116,7 @@ sub _contains_rcs_variable {
     my ($string, $rcs_regexes) = @_;
 
     foreach my $regex ( @{$rcs_regexes} ) {
-        return 1 if $string =~ m/$regex/xms;
+        return $TRUE if $string =~ m/$regex/xms;
     }
 
     return;
@@ -109,21 +124,18 @@ sub _contains_rcs_variable {
 
 #-----------------------------------------------------------------------------
 
-sub _looks_like_use_overload {
-    my ( $elem ) = @_;
+sub _looks_like_use_vars {
+    my ($elem) = @_;
 
     my $string = $elem->string();
 
-    $string eq q<@{}>           ## no critic (RequireInterpolationOfMetachars)
-        or $string eq q<${}>    ## no critic (RequireInterpolationOfMetachars)
-        or return;
-
-    my $stmt = $elem;
-    while (not $stmt->isa('PPI::Statement::Include')) {
-        $stmt = $stmt->parent() or return;
+    my $statement = $elem;
+    while ( not $statement->isa('PPI::Statement::Include') ) {
+        $statement = $statement->parent() or return;
     }
 
-    return $stmt->type() eq q<use> && $stmt->module() eq q<overload>;
+    return if $statement->type() ne q<use>;
+    return $statement->module() eq q<vars>;
 }
 
 1;
@@ -157,6 +169,29 @@ educated guess by looking for metacharacters and sigils which usually
 indicate that the string should be interpolated.
 
 
+=head2 Exceptions
+
+=over
+
+=item *
+
+Variable names to C<use vars>:
+
+    use vars '$x';          # ok
+    use vars ('$y', '$z');  # ok
+    use vars qw< $a $b >;   # ok
+
+
+=item *
+
+Things that look like e-mail addresses:
+
+    print 'john@foo.com';           # ok
+    $address = 'suzy.bar@baz.net';  # ok
+
+=back
+
+
 =head1 CONFIGURATION
 
 The C<rcs_keywords> option allows you to stop this policy from complaining
@@ -187,12 +222,12 @@ L<Perl::Critic::Policy::ValuesAndExpressions::ProhibitInterpolationOfLiterals|Pe
 
 =head1 AUTHOR
 
-Jeffrey Ryan Thalhammer <thaljef@cpan.org>
+Jeffrey Ryan Thalhammer <jeff@imaginative-software.com>
 
 
 =head1 COPYRIGHT
 
-Copyright (c) 2005-2009 Jeffrey Ryan Thalhammer.  All rights reserved.
+Copyright (c) 2005-2010 Imaginative Software Systems.  All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

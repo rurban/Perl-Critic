@@ -23,16 +23,24 @@ use Test::More;
 
 use Perl::Critic::PolicyFactory (-test => 1);
 use Perl::Critic;
+use Perl::Critic::Utils::Constants qw< $_MODULE_VERSION_TERM_ANSICOLOR >;
 
 #-----------------------------------------------------------------------------
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
 my @color_severity_params;
-my $skip_color_severity = eval { require Term::ANSIColor; 1; } ? undef :
-    'Term::ANSIColor is not available';
+my $skip_color_severity =
+    eval {
+        require Term::ANSIColor;
+        Term::ANSIColor->VERSION( $_MODULE_VERSION_TERM_ANSICOLOR );
+        1;
+    }
+        ? undef
+        : "Term::ANSIColor $_MODULE_VERSION_TERM_ANSICOLOR is not available";
+
 # We can not do the color-severity tests if Term::ANSIColor is not available,
 # because without Term::ANSIColor the parameters are not validated, so any
 # value will be accepted and we will not get any errors from them.
@@ -161,7 +169,7 @@ sub is_require_pod_sections_source_exception {
 
 #-----------------------------------------------------------------------------
 
-# ensure we run true if this test is loaded by
+# ensure we return true if this test is loaded by
 # t/01_config_bad_perlcriticrc.t_without_optional_dependencies.t
 1;
 

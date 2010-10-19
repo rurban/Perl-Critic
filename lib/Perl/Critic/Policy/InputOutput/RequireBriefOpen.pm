@@ -15,10 +15,12 @@ use Readonly;
 
 use List::MoreUtils qw(any);
 
-use Perl::Critic::Utils qw{ :severities :classification :booleans parse_arg_list };
+use Perl::Critic::Utils qw{ :severities :classification :booleans
+    hashify parse_arg_list
+};
 use base 'Perl::Critic::Policy';
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -27,6 +29,20 @@ Readonly::Scalar my $EXPL => [209];
 
 Readonly::Scalar my $SCALAR_SIGIL => q<$>;
 Readonly::Scalar my $GLOB_SIGIL   => q<*>;
+
+# Identify the builtins that are equivalent to 'open' and 'close'. Note that
+# 'return' is considered equivalent to 'close'.
+Readonly::Hash my %CLOSE_BUILTIN => hashify( qw{
+    close
+    CORE::close
+    CORE::GLOBAL::close
+    return
+} );
+Readonly::Hash my %OPEN_BUILTIN => hashify( qw{
+    open
+    CORE::open
+    CORE::GLOBAL::open
+} );
 
 #-----------------------------------------------------------------------------
 
@@ -52,7 +68,7 @@ sub violates {
     my ( $self, $elem, undef ) = @_;
 
     # Is it a call to open?
-    return if $elem ne 'open';
+    $OPEN_BUILTIN{$elem->content()} or return;
     return if ! is_function_call($elem);
     my @open_args = parse_arg_list($elem);
     return if 2 > @open_args; # not a valid call to open()
@@ -113,8 +129,7 @@ sub _find_close_invocations_or_return {
         return 0 if $candidate_loc->[0] == $open_loc->[0] && $candidate_loc->[1] <= $open_loc->[1];
         return undef if defined $end_line && $candidate_loc->[0] > $end_line;
         return 0 if !$candidate->isa('PPI::Token::Word');
-        return 1 if $candidate eq 'close' || $candidate eq 'return';
-        return 0;
+        return $CLOSE_BUILTIN{ $candidate->content() } || 0;
     });
     return @{$closes || []};
 }
@@ -298,7 +313,7 @@ Chris Dolan <cdolan@cpan.org>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2007-2009 Chris Dolan.  Many rights reserved.
+Copyright (c) 2007-2010 Chris Dolan.  Many rights reserved.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.  The full text of this license

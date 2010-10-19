@@ -1,4 +1,4 @@
-#!perl      ## no critic (Documentation::RequirePodSections)
+#!perl
 
 ##############################################################################
 #      $URL$
@@ -16,12 +16,16 @@ use strict;
 use warnings;
 
 use Perl::Critic::TestUtils qw(pcritique);
+use Readonly;
 
-use Test::More tests => 5;
+use Test::More;
+
+Readonly::Scalar my $NUMBER_OF_TESTS => 5;
+plan( tests => $NUMBER_OF_TESTS );
 
 #-----------------------------------------------------------------------------
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
@@ -29,10 +33,7 @@ Perl::Critic::TestUtils::block_perlcriticrc();
 
 my $code;
 my $policy = 'Documentation::PodSpelling';
-my $can_podspell =
-        eval {require Pod::Spell}
-    &&  can_determine_spell_command()
-    &&  can_run_spell_command();
+my $can_podspell = can_determine_spell_command() && can_run_spell_command();
 
 sub can_determine_spell_command {
     my $pol = Perl::Critic::Policy::Documentation::PodSpelling->new();
@@ -67,8 +68,13 @@ $code = <<'END_PERL';
 =cut
 END_PERL
 
-if ( eval { pcritique($policy, \$code) } ) {
-   skip 'Test environment is not English', 4
+# Sorry about the double negative. The idea is that if aspell fails (say,
+# because it can not find the right dictionary) or pcritique returns a
+# non-zero number we want to skip. We have to negate the eval to catch the
+# aspell failure, and then negate pcritique because we negated the eval.
+# Clearer code welcome.
+if ( ! eval { ! pcritique($policy, \$code) } ) {
+   skip 'Test environment is not English', $NUMBER_OF_TESTS;
 }
 
 #-----------------------------------------------------------------------------
@@ -152,7 +158,7 @@ END_PERL
 
 #-----------------------------------------------------------------------------
 
-# ensure we run true if this test is loaded by
+# ensure we return true if this test is loaded by
 # t/20_policy_pod_spelling.t_without_optional_dependencies.t
 1;
 
