@@ -19,17 +19,16 @@ use base 'Perl::Critic::Policy';
 
 use Perl::Critic::Utils qw{ :severities :classification :ppi :booleans
                             :language };
-use Perl::Critic::Utils::PPIRegexp qw(get_modifiers get_substitute_string);
 use PPI;
 use PPI::Document;
 
-our $VERSION = '1.096';
+our $VERSION = '1.110';
 
 #-----------------------------------------------------------------------------
 
 Readonly::Scalar my $DESC => q{Capture variable "%s" passed to subroutine "%s"};
 Readonly::Scalar my $EXPL =>
-q{Any regular expression in the subroutine will modify the caller's copy};
+q{Any regular expression in the subroutine may modify the caller's copy};
 
 Readonly::Scalar my $MINIMUM_NAMED_CAPTURE_VERSION => version->new(5.010);
 Readonly::Scalar my $PERCENT_PLUS => q{%+};
@@ -56,22 +55,17 @@ Readonly::Hash my %CLEAN_CONTAINER => (
     q{PPI::Structure::Subscript} => 1,
 );
 
-# Tokens that terminate the scan for the end of the argument list in a
-# parentheses-less function call (e.g. "open $foo, '<', $bar or die").
-Readonly::Hash my %ARGUMENT_LIST_END => (
-    'PPI::Token::Structure' => {
-        q{;} => 1,
-    },
-    'PPI::Token::Operator' => {
-        q{and} => 1,
-        q{or} => 1,
-        q{xor} => 1,
-    },
-);
-
 #-----------------------------------------------------------------------------
 
-sub supported_parameters { return ()                         }
+sub supported_parameters {
+    return (
+        {
+            name        => 'allow_subroutines',
+            description => 'Subroutines which sanitize their arguments',
+            behavior    => 'string list',
+        },
+    )
+}
 sub default_severity     { return $SEVERITY_HIGH             }
 sub default_themes       { return qw(core bugs)              }
 sub applies_to           { return (qw(
@@ -89,19 +83,16 @@ sub violates {
 
     my $perl_version = $document->highest_explicit_perl_version();
 
-    my @violations;
-    foreach my $info ( $self->_is_violation( $elem, $perl_version ) ) {
-        my $msg = sprintf $DESC, $info->{var}, $info->{sub};
-        push @violations, $self->violation( $msg, $EXPL, $elem );
-    }
-    return @violations;
+    return ( $self->_is_violation( $elem, $document, $perl_version ) );
 }
 
 #-----------------------------------------------------------------------------
 
-# This method returns a hash describing any capture variables found to be in
-# violation of the policy. It is really just a dispatcher, since the logic of
-# finding a violation depends on the object being analyzed.
+# This method returns a violation object for any capture variables found
+# to be in violation of the policy. It is really just a dispatcher,
+# since the logic of finding a violation depends on the object being
+# analyzed. The $perl_version has to be carried along because we may be
+# analyzing a bare PPI::Document rather than a Perl::Critic::Document.
 
 Readonly::Hash my %CLASS_HANDLER => (
     'PPI::Token::Regexp::Substitute' => \&_handle_substitute,
@@ -109,41 +100,45 @@ Readonly::Hash my %CLASS_HANDLER => (
 );
 
 sub _is_violation {
-    my ( $self, $elem, $perl_version ) = @_;
+    my ( $self, $elem, $document, $perl_version ) = @_;
     my $elem_class = ref $elem or return;
     $CLASS_HANDLER{$elem_class} or return;
-    return $CLASS_HANDLER{$elem_class}->($self, $elem, $perl_version);
+    return $CLASS_HANDLER{$elem_class}->($self, $elem, $document,
+        $perl_version );
 }
 
 #-----------------------------------------------------------------------------
 
-# This subroutine analyzes PPI::Token::Regexp::Substitute objects, and returns
-# a list of hashes containing the names of the offending variables and
-# subroutines, if any.
-#
-# Substitutions are of interest only if they have the 'e' modifier. If they
-# do, the substitution is a Perl expression, and must be parsed as such. This
-# is done by constructing a PPI document from it, and using that document to
-# recurse into the _is_violation() method.
+# This subroutine analyzes PPI::Token::Regexp::Substitute objects, and
+# returns a list of violation objects for aby offending variables found.
 
 sub _handle_substitute {
-    my ( $self, $elem, $perl_version ) = @_;
+    my ( $self, $elem, $document, $perl_version ) = @_;
 
-    my %modifiers = get_modifiers( $elem );
-    $modifiers{e} or return;
+    my $regexp = $document->ppix_regexp_from_element( $elem )
+        or return;
 
-    my $substitution = get_substitute_string( $elem );
-
-    my $document = PPI::Document->new( \$substitution );
+    my $replace = $regexp->replacement()
+        or return;
 
     # The following cribbed shamelessly from Perl::Critic::_critique
     # CAVEAT: it relies on prepare_to_scan_document() doing nothing.
 
     my @violations;
-    foreach my $type ( $self->applies_to() ) {
-        foreach my $element ( @{ $document->find( $type ) || []} ) {
-            push @violations, $self->_is_violation( $element, $perl_version );
+    foreach my $code_element ( @{ $replace->find( 'PPIx::Regexp::Token::Code' )
+        || [] } ) {
+
+        my $code_doc = $code_element->ppi();
+        foreach my $type ( $self->applies_to() ) {
+
+            foreach my $element ( @{ $code_doc->find( $type ) || [] } ) {
+
+                push @violations, $self->_is_violation(
+                    $element, $code_doc, $perl_version );
+            }
+
         }
+
     }
 
     return @violations;
@@ -155,13 +150,15 @@ sub _handle_substitute {
 # This subroutine analyzes PPI::Token::Word objects.
 
 # Barewords are of interest only if they represent function or method calls,
-# with arguments. We find all PPI::Token::Magic objects in the argument list
-# that represent substitution variables, and return a list of hashes,
-# containing the names of variables not rendered harmless by adjacent
-# operators, and the names of the subroutines they were passed to.
+# with arguments. For anything else, we return nothing.
+#
+# Given a subroutine or method call, we return violation objects for any
+# variables found in violation of the policy. The $perl_version must be
+# explicit because we may be analyzing a PPI::Document rather than the
+# original Perl::Critic::Document.
 
 sub _handle_call {
-    my ( $self, $elem, $perl_version ) = @_;
+    my ( $self, $elem, $document, $perl_version ) = @_;
 
     # We are only interested in method and function calls which are not Perl
     # built-ins.
@@ -169,332 +166,150 @@ sub _handle_call {
         or return;
     is_perl_builtin( $elem ) and return;
 
-    # No argument list, no capture variables.
-    my $first = $elem->snext_sibling()
+    my $subroutine = $elem->content();
+    $self->{_allow_subroutines}{ $subroutine }
+        and return;
+
+    return ( map { $self->violation(
+        sprintf( $DESC, $_->content(), $subroutine ), $EXPL, $_ ) }
+        _find_uncleaned_capture_variables_in_args( $perl_version, $elem )
+    );
+
+}
+
+#-----------------------------------------------------------------------------
+
+# @captures = _find_uncleaned_capture_variables_in_args(
+#     $perl_version, $elem );
+#
+# This subroutine assumes $elem is a subroutine call, and returns all
+# un-sanitized capture variables for the given $perl_version which are found
+# in the argument list.
+
+sub _find_uncleaned_capture_variables_in_args {
+    my ( $perl_version, $elem ) = @_;
+
+    my @rslt;
+    foreach my $arg ( parse_arg_list( $elem ) ) {
+
+        foreach my $capture (
+            grep { _is_capture_variable( $perl_version, $_ ) }
+            map { $_->isa( 'PPI::Node' ) ?
+            @{ $_->find( 'PPI::Token::Magic' ) || [] } :
+            $_ } @{ $arg } ) {
+
+            _is_value_cleaned( $capture, $arg->[0], $TRUE )
+                or _is_value_cleaned( $capture, $arg->[-1] )
+                or push @rslt, $capture;
+
+        }
+    }
+
+    return @rslt;
+}
+
+#-----------------------------------------------------------------------------
+
+# $elem = _is_capture_variable( $perl_version, $elem );
+#
+# This subroutine returns the $elem argument if it is a capture variable under
+# the given $perl_version. Otherwise it returns nothing. If $perl_version is
+# undef, we assume we are dealing with an 'old' Perl, that does not understand
+# named captures.
+
+sub _is_capture_variable {
+    my ( $perl_version, $elem ) = @_;
+
+    $elem or return;
+
+    $elem->isa( 'PPI::Token::Magic' )
         or return;
 
-    # If the next item is a PPI::Structure::List, it contains the argument
-    # list, and we set the scan up with a top bound, but no end bounds,
-    # starting from the first item in the list. Otherwise we start from the
-    # next item itself, and the end bounds are the original element and
-    # whatever we find scanning for the end of the argument list.
-    my ( $ceiling, $stop_left, $stop_scan );
-    if ( $first->isa( 'PPI::Structure::List' ) ) {
-        $ceiling = $first;
-        $first = $first->child(0);
-    } else {
-        $stop_left = $elem;
-        $stop_scan = \&_stop_scan;
-    }
-
-    # Find any capture variables in the argument list. The routine used to
-    # find them depends on our Perl version.
-    my $wanted = (
-        $perl_version &&
-        $MINIMUM_NAMED_CAPTURE_VERSION <= $perl_version
-    ) ? \&_find_capture_var_5010 : \&_find_capture_var_5008;
-
-    my @capture_variables = $self->_find_desired_tokens_from( $first,
-        $wanted, $stop_scan );
-    my $stop_right = pop @capture_variables;
-
-    # Check the operators surrounding each capture variable. If they generate
-    # no new value, preserve information on the violation.
-    my @violations;
-    foreach my $capture (@capture_variables) {
-
-        $self->_check_adjacent_operators( $capture, $ceiling, $stop_left,
-            $stop_right )
-            and push @violations, {
-                var => $capture->symbol(),
-                sub => $elem->content(),
-            };
-
-    }
-
-    # Return whatever violations we have found.
-    return @violations;
-
-}
-
-#-----------------------------------------------------------------------------
-
-# @found = $self->_find_desired_tokens_from( $elem, $wanted, $stop )
-#
-# This method finds the desired tokens starting from the given element.
-# $wanted and $stop are code references. These are called as (e.g.)
-# $wanted->( $self, $thing ) where $self is the same object we were called on,
-# and $thing is the PPI::Element to be examined.
-#
-# $wanted->( $self, $thing ) should return true if $thing is to be returned,
-# false if not, and undef if $thing is a PPI::Node that should not be
-# descended into.
-#
-# $stop->( $self, $thing ) should return true to stop the scan. The $thing
-# _will_ be included in the output as the last item. If $stop is not provided
-# (or is not matched), the scan goes to the end of whatever container $elem is
-# in, and the last item will be undef.
-#
-# The logic is cribbed heavily from PPI::Node->find(), the differences being:
-# - The scan starts on the given element;
-# - The scan ends when $stop->( $self, $thing ) returns true;
-# - Exceptions are not trapped.
-
-sub _find_desired_tokens_from {
-    my ( $self, $elem, $wanted, $stop ) = @_;
-
-    my @found;
-
-    my @queue;
-    {
-        my $sib = $elem;
-        while ( $sib ) {
-            push @queue, $sib;
-            $sib = $sib->next_sibling();
-        }
-    }
-    my $thing;
-    while ( $thing = shift @queue ) {
-
-        ( $stop && $stop->( $self, $thing ) )
-            and last;
-
-        my $rv = $wanted->( $self, $thing );
-        $rv and push @found, $thing;
-        defined $rv or next;
-        $thing->isa( 'PPI::Node' ) or next;
-
-        if ( $thing->isa( 'PPI::Structure' ) ) {
-            $thing->finish() and unshift @queue, $thing->finish();
-            unshift @queue, $thing->children();
-            $thing->start() and unshift @queue, $thing->start();
-        } else {
-            unshift @queue, $thing->children();
-        }
-    }
-
-    return (@found, $thing);
-
-}
-
-#-----------------------------------------------------------------------------
-
-# This subroutine recognizes where to stop the scan when we have a subroutine
-# call without parentheses around its arguments.
-
-sub _stop_scan {
-    my ($self, $elem) = @_;
-    my $class = ref $elem;
-    return $ARGUMENT_LIST_END{ $class } &&
-        $ARGUMENT_LIST_END{ $class }{ $elem->content() };
-}
-
-#-----------------------------------------------------------------------------
-
-# This subroutine is the PPI::Node->find(\&wanted) routine to be used with
-# versions of Perl below 5.010.
-
-sub _find_capture_var_5008 {
-    my ( undef, $elem ) = @_;
-    $elem->isa( 'PPI::Token::Magic' ) or return $FALSE;
-    ($elem->symbol() =~ m/ \A \$ ( \d+ ) \z /smx && $1) and return $TRUE;
-    return $FALSE;
-}
-
-#-----------------------------------------------------------------------------
-
-# This subroutine is the PPI::Node->find(\&wanted) routine to be used with
-# Perl 5.010 and above.
-
-sub _find_capture_var_5010 {
-    my ( undef, $elem ) = @_;
-    $elem->isa( 'PPI::Token::Magic' ) or return $FALSE;
     my $symbol = $elem->symbol();
-    ($symbol =~ m/ \A \$ ( \d+ ) \z /smx && $1) and return $TRUE;
-    $NAMED_CAPTURE_BUFFER{$symbol} and return $TRUE;
-    return $FALSE;
-}
 
-#-----------------------------------------------------------------------------
+    if ( $symbol =~ m/ \A \$ ( \d+ ) \z /smx ) {
+        $1 and return $elem;
+        return;
+    }
 
-# my $rslt = $self->_check_adjacent_operators( $elem, $ceiling, $stop_left,
-#     $stop_right );
-# This method checks operators adjacent to the given element (assumed to be a
-# PPI::Token::Magic) to see if they cause a new value to be computed. If they
-# do, nothing is returned. If they do not $TRUE is returned.
-#
-# The arguments after the element to search from are the elements that bound
-# the search above ($ceiling), to the left($stop_left), and to the right
-# ($stop_right) respectively. If any of these elements is encountered, the
-# check terminates and returns $TRUE. None of the boundary arguments is
-# required, but for useful searches you will specify either $ceiling, both
-# $stop_left and $stop_right, or all three will be specified.
-#
-# This method is really just a wrapper for _check_adjacent_operator_left and
-# _check_adjacent_operator_right, which do the heavy lifting.
+    $perl_version
+        or return;
 
-sub _check_adjacent_operators {
-    my ( $self, $elem, $ceiling, $stop_left, $stop_right ) = @_;
+    $MINIMUM_NAMED_CAPTURE_VERSION <= $perl_version
+        and $NAMED_CAPTURE_BUFFER{$symbol}
+        and return $elem;
 
-    return $self->_check_adjacent_operator_left(
-        $elem, $ceiling, $stop_left )
-    && $self->_check_adjacent_operator_right(
-        $elem, $ceiling, $stop_right );
+    return;
 
 }
 
 #-----------------------------------------------------------------------------
 
-# This method checks operators to the left of the given element (assumed to be
-# a PPI::Token::Magic) to see if they cause a new value to be computed. If
-# they do, nothing is returned. If they do not $TRUE is returned.
+# $boolean = _is_value_cleaned( $elem, $stop, $scan_left );
 #
-# The arguments after the element bound the search above and to the left
-# respectively. If any of these elements is encountered, the check terminates
-# and returns $TRUE. Only the boundary above ($ceiling) is
-# required.
-#
-# We work by scanning left for the next PPI::Token::Word,
-# PPI::Token::Operator, or (if specified) the $stop element.
-#
-# Finding $stop causes us to return $TRUE.
-#
-# Finding a PPI::Token::Word which is a function
-# call causes to return nothing, since we will be seeing it again.
-#
-# Finding a PPI::Token::Operator causes us to return nothing provided it is
-# not in the $UNCLEAN_OPERATOR hash and its precedence number is higher than
-# any operators scanned thus far; otherwise we continue scanning.
-#
-# If we get to the end of the current container without returning, we repeat
-# the analysis on the parent, returning $TRUE if the parent is
-# $ceiling, or returning nothing if the parent's class is in the
-# $CLEAN_CONTAINER hash.
+# This subroutine scans in the indicated direction (left if $scan_left
+# is true, otherwise right) until it either finds an operator that
+# sanitizes the value of the given $elem, or until it hits the $stop
+# element. In the former case it returns true; in the latter it returns
+# false.
 
-sub _check_adjacent_operator_left {
-    my ( $self, $elem, $ceiling, $stop ) = @_;
+sub _is_value_cleaned {
 
-    my $check = $elem;
-    $ceiling ||= 0;
-    while ( $check && $check != $ceiling ) {
+    my ( $elem, $stop, $scan_left ) = @_;
+    my $next_sibling = $scan_left ? 'previous_sibling' : 'next_sibling';
 
-        $CLEAN_CONTAINER{ ref $check } and return;
+    my $limiting_precedence = 0;
 
-        my $precedence;
+    while ( $elem ) {
 
-        my $oper = $check;
-        while ( $oper = _find_operator(
-                $oper, sub { $_[0]->sprevious_sibling() }, $stop ) ) {
+        $elem->significant()
+            or next;
 
-            ( $stop && $oper == $stop ) and return $TRUE;
+        if ( $elem->isa( 'PPI::Token::Operator' ) ) {
 
-            ( $oper->isa( 'PPI::Token::Word' ) &&
-                ( is_method_call( $oper ) || is_function_call( $oper ) ) )
-                and return;     # We will be seeing this one again.
-
-            my $po = precedence_of( $oper );
-            defined $po or next;
-
-            ( defined $precedence && $po < $precedence )
+            my $content = $elem->content();
+            my $precedence = precedence_of( $content );
+            $precedence < $limiting_precedence
                 and next;
 
-            $UNCLEAN_OPERATOR{ $oper->content() } or return;
-            $precedence = $po;
+            $UNCLEAN_OPERATOR{ $elem->content() }
+                or return $TRUE;
+            $limiting_precedence = $precedence;
+
+        } elsif ( $scan_left && $elem->isa( 'PPI::Token::Word' ) &&
+            ( is_method_call( $elem ) || is_function_call( $elem ) ) ) {
+
+            # The following is a little white lie. We're actually pretty
+            # sure at this point that the value is _not_ sanitized, but
+            # we also know that we have found a subroutine call that we
+            # will encounter later. So we abort the scan now to prevent
+            # double-reporting the problem. And besides, when we look at
+            # the subroutine in detail, we might find that it sanitizes
+            # the value.
+
+            return $TRUE;
 
         }
 
     } continue {
 
-        $check = $check->parent();
+        $elem == $stop and last;
 
-    }
-
-    return $TRUE;
-
-}
-
-#-----------------------------------------------------------------------------
-
-# This method checks operators to the right of the given element (assumed to
-# be a PPI::Token::Magic) to see if they cause a new value to be computed. If
-# they do, nothing is returned. If they do not $TRUE is returned.
-#
-# The arguments after the element bound the search above and to the right
-# respectively. If any of these elements is encountered, the check terminates
-# and returns $TRUE. Only the boundary above ($ceiling) is
-# required.
-#
-# We work by scanning left for the next PPI::Token::Word,
-# PPI::Token::Operator, or (if specified) the $stop element.
-#
-# Finding $stop causes us to return $TRUE.
-#
-# PPI::Token::Word objects are ignored.
-#
-# Finding a PPI::Token::Operator causes us to return nothing provided it is
-# not in the $UNCLEAN_OPERATOR hash and its precedence number is higher than
-# any operators scanned thus far; otherwise we continue scanning.
-#
-# If we get to the end of the current container without returning, we repeat
-# the analysis on the parent, returning $TRUE if the parent is
-# $ceiling, or returning nothing if the parent's class is in the
-# $CLEAN_CONTAINER hash.
-
-sub _check_adjacent_operator_right {
-    my ( $self, $elem, $ceiling, $stop ) = @_;
-
-    my $check = $elem;
-    $ceiling ||= 0;
-    while ( $check && $check != $ceiling ) {
-
-        $CLEAN_CONTAINER{ ref $check } and return;
-
-        my $precedence;
-
-        my $oper = $check;
-        while ( $oper = _find_operator(
-            $oper, sub { $_[0]->snext_sibling() }, $stop ) ) {
-
-            ( $stop && $oper == $stop ) and return $TRUE;
-
-            $oper->isa( 'PPI::Token::Word' ) and next;
-
-            ( defined $precedence && precedence_of( $oper ) < $precedence )
-                and next;
-
-            $UNCLEAN_OPERATOR{ $oper->content() } or return;
-            $precedence = precedence_of( $oper );
-
+        if ( my $sib = $elem->$next_sibling() ) {
+            $elem = $sib;
+        } else {
+            $elem = $elem->parent()
+                or return;
+            $CLEAN_CONTAINER{ ref $elem }
+                and return $TRUE;
+            $limiting_precedence = 0;
         }
-
-    } continue {
-
-        $check = $check->parent();
-
     }
 
-    return $TRUE;
-
-}
-
-#-----------------------------------------------------------------------------
-
-# This subroutine scans in the direction specified by the $advance argument
-# (which is a reference to code to find the next or previous token), looking
-# for operators, words, or the $stop token if that was passed. When it finds
-# any of the things it is looking for, it returns the object found. If it does
-# not, it returns nothing.
-
-sub _find_operator {
-    my ( $elem, $advance, $stop ) = @_;
-    my $oper = $elem;
-    while ($oper = $advance->($oper)) {
-        ($stop && $oper == $stop) and return $stop;
-        $oper->isa( 'PPI::Token::Operator' ) and return $oper;
-        $oper->isa( 'PPI::Token::Word' ) and return $oper;
-    }
     return;
 }
+
+#-----------------------------------------------------------------------------
 
 1;
 
@@ -503,6 +318,8 @@ __END__
 #-----------------------------------------------------------------------------
 
 =pod
+
+=for stopwords builtins
 
 =head1 NAME
 
@@ -552,7 +369,29 @@ This Policy is a response to RT 38289. The following script adapted from RT
 
 =head1 CONFIGURATION
 
-This Policy is not configurable except for the standard options.
+This Policy has a single configuration option: C<allowed_subroutines>.
+
+The C<allowed_subroutines> option allows you to configure the names of
+subroutines which sanitize their arguments before use. For example,
+the argument of
+
+ sub decrement {
+     my ( $arg ) = @_;
+     return --$arg;
+ }
+
+is sanitized by being copied out of @_. You can tell this policy to
+ignore C<decrement()> by adding something like the following to your
+F<.perlcriticrc> file:
+
+ [Subroutines::ProhibitPassingCaptureVariable]
+ allow_subroutines = decrement
+
+Multiple names are specified blank-delimited; to exempt both
+C<decrement()> and C<increment()>, specify
+
+ [Subroutines::ProhibitPassingCaptureVariable]
+ allow_subroutines = decrement increment
 
 =head1 CAVEATS
 
@@ -575,13 +414,19 @@ Substitutions whose right side contains a here document do not seem to be
 parsed correctly by PPI, so analysis of documents containing such code may
 produce anomalous results.
 
+Cases like C<< foo( sprintf '%s', $1 ) >> are not currently handled
+correctly because of the difficulty of correctly picking apart the
+argument list. When the C<parse_arg_list()> utility sees C<foo()> as
+receiving a single argument, this should 'just work.'.
+C<< foo( sprintf( '%s', $1 ) ) >> should be handled correctly.
+
 =head1 AUTHOR
 
 Thomas R. Wyant, III F<wyant at cpan dot org>.
 
 =head1 COPYRIGHT
 
-Copyright 2009 Thomas R. Wyant, III.
+Copyright 2009-2010 Thomas R. Wyant, III.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.
