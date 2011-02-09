@@ -71,7 +71,7 @@ my $critic =
         -profile => $profile,
         -theme => 'core',
     );
-my @violations = $critic->critique( \$code );
+my @violations = $critic->critique( \$code );   ## no critic (ProhibitUnusedVariables)
 
 #print @violations;
 #exit;

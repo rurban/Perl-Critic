@@ -14,8 +14,8 @@ my ($x, @z, %y);
 
 #-----------------------------------------------------------------------------
 
-## name Simple unused assigned lexicals.  Not going to handle this yet.
-## failures 0
+## name Simple unused assigned lexicals.
+## failures 1
 ## cut
 
 # Need to look out for RAII.
@@ -23,13 +23,11 @@ my $y = foo();
 
 #-----------------------------------------------------------------------------
 
-## name List assignment.  Not going to handle this yet.
-## failures 0
+## name List assignment.
+## failures 2
 ## cut
 
-sub foo {
-    my ($b, $y) = @_;
-}
+my ($b, $y) = qw{ foo bar };
 
 #-----------------------------------------------------------------------------
 
@@ -87,8 +85,8 @@ $foo{bar} = -24;
 
 #-----------------------------------------------------------------------------
 
-## name Shadowed variable.  No going to handle this yet.
-## failures 0
+## name Shadowed variable.
+## failures 2
 ## cut
 
 my $x = 2;
@@ -100,8 +98,23 @@ my $x = 2;
 
 #-----------------------------------------------------------------------------
 
-## name Separate lexicals.  No going to handle this yet.
-## failures 0
+## name Shadowed variable, one of which is used
+## failures 1
+## cut
+
+my $x = 2;
+
+{
+    my $x = 1;
+    blah();
+}
+
+blah( $x );
+
+#-----------------------------------------------------------------------------
+
+## name Separate lexicals.
+## failures 2
 ## cut
 
 {
@@ -111,6 +124,21 @@ my $x = 2;
 {
     my $x = 1;
     blah();
+}
+
+#-----------------------------------------------------------------------------
+
+## name Separate lexicals, one of which is used.
+## failures 1
+## cut
+
+{
+    my $x = 2;
+}
+
+{
+    my $x = 1;
+    blah( $x );
 }
 
 #-----------------------------------------------------------------------------
@@ -137,8 +165,13 @@ my $x = 2;
 ## cut
 
 my %foo;
-
 s/ ( \w+ ) /$foo{$1}/smx;
+
+my @bar = ( qw{ 0 I II III IV V } );
+s/ ( \d+ ) / "$bar[$1]" /smxge;
+
+my $baz = 'Bat';
+s/ \w+ /${baz}man/smx;
 
 #-----------------------------------------------------------------------------
 
@@ -159,6 +192,258 @@ s/ ( \w+ ) / $foo{$1} /smxe;
 my %foo;
 
 m/ (?{ $foo{bar} }) /smx;
+
+#-----------------------------------------------------------------------------
+
+## name Variables interpolated into string
+## failures 0
+## cut
+
+my $foo = 'Foozie';
+my $bar = 'Alley Oop';
+my @baz = qw{ Moe Larry Curley };
+my %fruit = (
+    apple   => 'manzana',
+    banana  => 'platino',
+);
+my $teddy = 'Theodore';
+my $one = 'I'
+my $five = 'V';
+
+"$foo";
+qq{$bar};
+"$baz[1]";
+qq{$fruit{apple}};
+"\\${teddy}bear";
+"$one$five";
+
+#-----------------------------------------------------------------------------
+
+## name Variables not interpolated into string
+## failures 4
+## cut
+
+my $foo = 'Foozie';
+my $bar = 'Alley Oop';
+my @baz = qw{ Moe Larry Curley };
+my %fruit = (
+    apple   => 'manzana',
+    banana  => 'platino',
+);
+
+"\$foo";
+qq{\\\$bar};
+" \$baz[1]";
+qq{\\\\\$fruit{apple}};
+"\${foo}bear";
+
+#-----------------------------------------------------------------------------
+
+## name Variable interpolated into here document
+## failures 0
+## cut
+
+my $foo = 'Foozie';
+my @baz = qw{ Moe Larry Curley };
+my %fruit = (
+    apple   => 'manzana',
+    banana  => 'platino',
+);
+
+foo( <<EOD );
+$foo $baz[0] $fruit{apple} ${foo}bar
+EOD
+
+#-----------------------------------------------------------------------------
+
+## name Unused unpacking variables are allowed.
+## failures 0
+## cut
+
+sub foo {
+    my ( $self ) = @_;
+}
+
+sub bar {
+    my $self = shift;
+}
+
+sub baz {
+    my $self = shift @_;
+}
+
+sub burfle {
+    my $self = $_[0];
+}
+
+#-----------------------------------------------------------------------------
+
+## name Unused unpacking variables can be forbidden
+## parms { prohibit_unused_subroutine_arguments => '1' }
+## failures 4
+## cut
+
+sub foo {
+    my ( $self ) = @_;
+}
+
+sub bar {
+    my $self = shift;
+}
+
+sub baz {
+    my $self = shift @_;
+}
+
+sub burfle {
+    my $self = $_[0];
+}
+
+#-----------------------------------------------------------------------------
+
+## name Variable does not exist until next statement after 'my'
+## failures 1
+## cut
+
+my $x;
+
+do {
+    my $x = $x;
+};
+
+$x = 42;
+
+#-----------------------------------------------------------------------------
+
+## name Variable does not exist until next statement after 'my' (list assign)
+## failures 2
+## cut
+
+my ( $x, $y );
+
+do {
+    my ( $x, $y ) = ( $x, $y );
+};
+
+( $x, $y ) = ( 17, 42 );
+
+#-----------------------------------------------------------------------------
+
+## name PPI::Token::QuoteLike::ReadLine
+## failures 0
+## cut
+
+my $fh = IO::File->new( 'foo.txt', '<' );
+
+while ( <$fh> ) {
+    print;
+}
+
+#-----------------------------------------------------------------------------
+
+## name Interpolating back-tick-ish constructions
+## failures 0
+## cut
+
+my ( $foo, $bar ) = qw{ baz burfle };
+
+`$foo`;
+qx{$bar};
+
+#-----------------------------------------------------------------------------
+
+## name Non-interpolating back-tick-ish constructions
+## failures 1
+## cut
+
+my $foo = 'bar';
+
+qx'$foo';
+
+#-----------------------------------------------------------------------------
+
+## name PPI edge case open( my $fh, $mode, $name )
+## failures 0
+## cut
+
+open( my $fh, $mode, $name );   # Should not trigger on $mode, $name
+print { $fh } "Hello, sailor!\n";
+
+#-----------------------------------------------------------------------------
+
+## name Taking a reference is OK
+## failures 0
+## cut
+
+\( my $foo = 'bar' );
+\do { my $bar = 'baz' };
+
+#-----------------------------------------------------------------------------
+
+## name Taking a reference is not OK if the user says not
+## parms { prohibit_reference_only_variables => '1' }
+## failures 2
+## cut
+
+\( my $foo = 'bar' );
+\do { my $bar = 'baz' };
+
+#-----------------------------------------------------------------------------
+
+## name Unknown computations are not allowed
+## failures 1
+## cut
+
+{
+    my $foo = scope_watch();
+}
+
+#-----------------------------------------------------------------------------
+
+## name Can add to allowed computation list
+## parms { allow_if_computed_by => 'scope_watch' }
+## failures 0
+## cut
+
+{
+    my $foo = scope_watch();
+}
+
+#-----------------------------------------------------------------------------
+
+## name Double dollar form of dereference
+## failures 0
+## cut
+
+my $foo = { bar => 42 };
+print $$foo{bar};
+my $bar = [ 42 ];
+print $$bar[0];
+my $baz = { bar => 42 };
+print "$$baz{bar}\n";
+my $burfle = [ 42 ];
+print "$$burfle[0]\n";
+
+#-----------------------------------------------------------------------------
+
+## name $#foo and friends
+## failures 0
+## cut
+
+my @foo;
+print $#foo;
+
+my $bar = [ qw{ one two three } ];
+print $#$bar;
+
+#-----------------------------------------------------------------------------
+
+## name curly-bracketed variable names
+## failures 0
+## cut
+
+my $foo = 'bar';
+print ${foo}
 
 #-----------------------------------------------------------------------------
 
