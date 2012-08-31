@@ -181,7 +181,7 @@ sub _get_symbol_declarations {
 
             $is_declaration->{ refaddr( $symbol ) } = 1;
 
-            unshift @{ $declared->{ _get_symbol_name( $symbol ) } ||= [] }, {
+            unshift @{ $declared->{ $symbol->symbol() } ||= [] }, {
                 element => $symbol,
                 is_allowed_computation => $is_allowed_computation,
                 is_global => $is_global,
@@ -260,14 +260,14 @@ sub _get_symbol_uses {
         my $scope = $scope_of_record ||
             Perl::Critic::Utils::Scope->new( $symbol );
 
-        _record_symbol_use( _get_symbol_name( $symbol ), $scope, $declared );
+        _record_symbol_use( $symbol->symbol(), $scope, $declared );
 
     }
 
     # For some reason, PPI parses '$#foo' as a PPI::Token::ArrayIndex.
     # $#$foo is parsed as a Cast followed by a Symbol, so as long as
-    # nobody decides the '$#' cast causes _get_symbol_name (or, ideally,
-    # $elem->symbol()) to return something other than '$foo', we're cool.
+    # nobody decides the '$#' cast causes $elem->symbol() to return
+    # something other than '$foo', we're cool.
     foreach my $elem ( @{ $document->find( 'PPI::Token::ArrayIndex' ) || [] }
     ) {
 
@@ -474,30 +474,6 @@ sub _get_regexp_symbol_uses {
 
 #-----------------------------------------------------------------------------
 
-#   This subroutine is a workaround for PPI bug #65199. The problem is
-#   that PPI (at least as of 1.213) does not take into account the fact
-#   that (e.g.) $$foo{bar} is equivalent to $foo->{bar}, and thinks the
-#   former makes use of %foo.
-
-Readonly::Hash my %CAST_WHICH_TRUMPS_BRACES => hashify( qw{ $ @ } );
-sub _get_symbol_name {
-    my ( $elem ) = @_;  # Assumed to be a PPI::Token::Symbol
-    my $name = $elem->symbol();
-    my $cast = $elem->sprevious_sibling()
-        or return $name;
-    $cast->isa( 'PPI::Token::Cast' )
-        or return $name;
-    $CAST_WHICH_TRUMPS_BRACES{ $cast->content() }
-        or return $name;
-    my $type = substr $elem->canonical(), 0, 1;
-    q<$> eq $type
-        and $name =~ s/ \A [%\@] /\$/smx;
-    return $name;
-}
-
-
-#-----------------------------------------------------------------------------
-
 sub _get_violations {
     my ( $self, $declared ) = @_;
 
@@ -519,7 +495,7 @@ sub _get_violations {
     }
 
     return ( map { $self->violation(
-            sprintf( '%s is declared but not used', _get_symbol_name( $_ ) ),
+            sprintf( '%s is declared but not used', $_->symbol() ),
             $EXPL,
             $_
         ) } sort { $a->line_number() <=> $b->line_number() ||
