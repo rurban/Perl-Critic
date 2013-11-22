@@ -21,26 +21,74 @@ our $VERSION = '1.121';
 
 #-----------------------------------------------------------------------------
 
-@ARGV = ($0);
+@ARGV = '/Users/andy/bin/ack';
 exit main();
 
-sub main{
-    for my $file ( @ARGV ) {
-        my $doc = PPI::Document->new( $file );
+sub main {
+    my $pcpd = App::PCPD->new;
+    for my $filename ( @ARGV ) {
+        my $doc = PPI::Document->new( $filename );
         my $dumper = PPI::Dumper->new( $doc, whitespace => 0, locations => 0 );
-        $dumper->print;
-        exit;
-        my $statement = $doc->find_first( sub { 1 } );
-        {use Data::Dumper; local $Data::Dumper::Sortkeys=1; warn Dumper( $statement )}
-
-        while ( $statement = $statement->next_sibling ) {
-            {use Data::Dumper; local $Data::Dumper::Sortkeys=1; warn Dumper( $statement )}
-        }
+        $pcpd->watch_for_strings( $filename, $doc );
     }
+    {use Data::Dumper; local $Data::Dumper::Sortkeys=1; warn Dumper( $pcpd->{strings} )}
+
+    return 0;
 }
 
 my $single_quoted_str = 'Quoted string';
-my $double_quoted_str = "Quoted string";
-my $heredoc = <<'HERE';
-String in a heredoc
+sub some_func {
+    my $double_quoted_str = "Quoted string";
+    my $heredoc = <<'HERE';
+    String in a heredoc
 HERE
+}
+
+package App::PCPD;
+
+sub new {
+    my $class = shift;
+
+    my $self = bless {
+        strings => [],
+    }, $class;
+
+    return $self;
+}
+
+sub add_strings {
+    my $self     = shift;
+    my $filename = shift;
+    my $element  = shift;
+    my @strings  = shift;
+
+    my @trimmed = @strings;
+    for ( @trimmed ) {
+        s/^\s+//;
+        s/\s+$//;
+    }
+    push( @{$self->{strings}}, map { [ $filename, $element, $_ ] } @trimmed );
+}
+
+
+sub watch_for_strings {
+    my $self     = shift;
+    my $filename = shift;
+    my $el       = shift;
+
+    if ( $el->isa( 'PPI::Token::Quote' ) ) {
+        $self->add_strings( $filename, $el, $el->string );
+    }
+    elsif ( $el->isa( 'PPI::Token::HereDoc' ) ) {
+        $self->add_strings( $filename, $el, $el->heredoc );
+    }
+
+    if ( $el->isa('PPI::Node') ) {
+        foreach my $child ( @{$el->{children}} ) {
+            $self->watch_for_strings( $filename, $child );
+        }
+    }
+
+    return;
+}
+
