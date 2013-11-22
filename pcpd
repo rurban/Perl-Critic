@@ -1,0 +1,46 @@
+#!perl
+
+## There's too much use of source code in strings.
+## no critic (RequireInterpolationOfMetachars)
+
+use 5.006001;
+use strict;
+use warnings;
+
+use Carp qw< confess >;
+
+use File::Slurp qw( read_file );
+use PPI::Document ();
+use PPI::Document::File ();
+use Perl::Critic::Document ();
+
+use Test::More tests => 124;
+
+#-----------------------------------------------------------------------------
+
+our $VERSION = '1.121';
+
+#-----------------------------------------------------------------------------
+
+exit main();
+
+sub main {
+    local @ARGV ||= ($0);
+
+    for my $file ( @ARGV ) {
+        my $code = read_file( $file );
+        my $doc = Perl::Critic::Document->new('-source' => ref $code ? $code : \$code);
+        my $statement = $doc->find_first( sub { $_[1] eq 'open' } );
+    }
+}
+
+
+#-----------------------------------------------------------------------------
+# Local Variables:
+#   mode: cperl
+#   cperl-indent-level: 4
+#   fill-column: 78
+#   indent-tabs-mode: nil
+#   c-indentation-style: bsd
+# End:
+# ex: set ts=8 sts=4 sw=4 tw=78 ft=perl expandtab shiftround :
