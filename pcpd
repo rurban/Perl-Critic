@@ -16,15 +16,21 @@ exit main();
 
 sub main {
     my $opts = {
-        minfiles => 1,
-        minfound => 2,
-        minlen   => 1,
+        minfiles  => 1,
+        minfound  => 2,
+        minlen    => 1,
+        ignore_re => [],
     };
     GetOptions(
-        'minfiles=i' => \$opts->{minfiles},
-        'minfound=i' => \$opts->{minfound},
-        'minlen=i'   => \$opts->{minlen},
+        'minfiles=i'  => \$opts->{minfiles},
+        'minfound=i'  => \$opts->{minfound},
+        'minlen=i'    => \$opts->{minlen},
+        'ignore_re=s' => $opts->{ignore_re},
     ) or exit 1;
+
+    for ( @{$opts->{ignore_re}} ) {
+        $_ = qr/$_/;
+    }
 
     my $iter = build_file_iterator( @ARGV );
 
@@ -96,13 +102,26 @@ sub watch_for_strings {
     my $str;
     if ( $el->isa( 'PPI::Token::Quote' ) ) {
         $str = $el->string;
+
+        # Maybe?
+        if ( $el->isa( 'PPI::Token::Quote::Double' ) || $el->isa( 'PPI::Token::Quote::Interpolate' ) ) {
+            $str =~ s/\\n/\n/g;
+        }
     }
+
     #elsif ( $el->isa( 'PPI::Token::HereDoc' ) ) {
     #    $str = $el->heredoc;
     #}
 
-    if ( $str && (length($str) >= $opts->{minlen}) ) {
-        $self->add_strings( $filename, $el, $str );
+    if ( defined($str) && (length($str) >= $opts->{minlen}) ) {
+        my $ignore = 0;
+        for my $re ( @{$opts->{ignore_re}} ) {
+            if ( $str =~ $re ) {
+                $ignore = 1;
+                last;
+            }
+        }
+        $self->add_strings( $filename, $el, $str ) unless $ignore;
     }
 
     if ( $el->isa('PPI::Node') ) {
