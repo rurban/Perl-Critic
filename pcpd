@@ -16,19 +16,21 @@ exit main();
 
 sub main {
     my $opts = {
-        minfiles  => 1,
-        minfound  => 2,
-        minlen    => 1,
-        ignore_re => [],
+        minfiles   => 1,
+        minfound   => 2,
+        minlen     => 1,
+        exclude_re => [],
+        include_re => [],
     };
     GetOptions(
-        'minfiles=i'  => \$opts->{minfiles},
-        'minfound=i'  => \$opts->{minfound},
-        'minlen=i'    => \$opts->{minlen},
-        'ignore_re=s' => $opts->{ignore_re},
+        'minfiles=i'   => \$opts->{minfiles},
+        'minfound=i'   => \$opts->{minfound},
+        'minlen=i'     => \$opts->{minlen},
+        'exclude_re=s' => $opts->{exclude_re},
+        'include_re=s' => $opts->{include_re},
     ) or exit 1;
 
-    for ( @{$opts->{ignore_re}} ) {
+    for ( @{$opts->{exclude_re}}, @{$opts->{include_re}} ) {
         $_ = qr/$_/;
     }
 
@@ -115,13 +117,25 @@ sub watch_for_strings {
 
     if ( defined($str) && (length($str) >= $opts->{minlen}) ) {
         my $ignore = 0;
-        for my $re ( @{$opts->{ignore_re}} ) {
+        for my $re ( @{$opts->{exclude_re}} ) {
             if ( $str =~ $re ) {
                 $ignore = 1;
                 last;
             }
         }
-        $self->add_strings( $filename, $el, $str ) unless $ignore;
+
+        my $include = !$ignore;
+        if ( $include && @{$opts->{include_re}} ) {
+            $include = 0;
+            for my $re ( @{$opts->{include_re}} ) {
+                if ( $str =~ $re ) {
+                    $include = 1;
+                    last;
+                }
+            }
+        }
+
+        $self->add_strings( $filename, $el, $str ) if $include;
     }
 
     if ( $el->isa('PPI::Node') ) {
@@ -137,7 +151,7 @@ sub print_results {
     my $self = shift;
     my $opts = shift;
 
-    for my $str ( sort keys %{$self->{strings}} ) {
+    for my $str ( $self->ordered_strings ) {
         my $strobj = $self->{strings}->{$str};
 
         my $show = 1;
@@ -156,6 +170,17 @@ sub print_results {
     }
 
     return;
+}
+
+
+sub ordered_strings {
+    my $self = shift;
+
+    my @strings = keys %{$self->{strings}};
+
+    @strings = sort { lc($a) cmp lc($b) } @strings;
+
+    return @strings;
 }
 
 
