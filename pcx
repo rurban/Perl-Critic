@@ -4,8 +4,6 @@ use 5.006001;
 use strict;
 use warnings;
 
-use Carp qw< confess >;
-
 use Getopt::Long;
 
 use File::Next ();
@@ -18,21 +16,11 @@ sub main {
     my $opts = {
         minfiles   => 1,
         minfound   => 2,
-        minlen     => 1,
-        exclude_re => [],
-        include_re => [],
     };
     GetOptions(
         'minfiles=i'   => \$opts->{minfiles},
         'minfound=i'   => \$opts->{minfound},
-        'minlen=i'     => \$opts->{minlen},
-        'exclude_re=s' => $opts->{exclude_re},
-        'include_re=s' => $opts->{include_re},
     ) or exit 1;
-
-    for ( @{$opts->{exclude_re}}, @{$opts->{include_re}} ) {
-        $_ = qr/$_/;
-    }
 
     my $iter = build_file_iterator( @ARGV );
 
@@ -43,8 +31,8 @@ sub main {
         use PPI::Dumper;
         my $dumper = PPI::Dumper->new( $doc, whitespace => 0, locations => 0 );
         $dumper->print;
-        last;
-        $pcpd->watch_for_strings( $filename, $doc, $opts );
+        #last;
+        $pcpd->watch_for_statements( $filename, $doc, $opts );
     }
 
     $pcpd->print_results( $opts );
@@ -98,52 +86,23 @@ sub add_strings {
 }
 
 
-sub watch_for_strings {
+sub watch_for_statements {
     my $self     = shift;
     my $filename = shift;
     my $el       = shift;
     my $opts     = shift;
 
     my $str;
-    if ( $el->isa( 'PPI::Token::Quote' ) ) {
-        $str = $el->string;
+    if ( $el->isa( 'PPI::Statement' ) && !$el->isa( 'PPI::Statement::Expression' ) ) {
+        $str = $el->content;
 
-        # Maybe?
-        if ( $el->isa( 'PPI::Token::Quote::Double' ) || $el->isa( 'PPI::Token::Quote::Interpolate' ) ) {
-            $str =~ s/\\n/\n/g;
-        }
-    }
-
-    #elsif ( $el->isa( 'PPI::Token::HereDoc' ) ) {
-    #    $str = $el->heredoc;
-    #}
-
-    if ( defined($str) && (length($str) >= $opts->{minlen}) ) {
-        my $ignore = 0;
-        for my $re ( @{$opts->{exclude_re}} ) {
-            if ( $str =~ $re ) {
-                $ignore = 1;
-                last;
-            }
-        }
-
-        my $include = !$ignore;
-        if ( $include && @{$opts->{include_re}} ) {
-            $include = 0;
-            for my $re ( @{$opts->{include_re}} ) {
-                if ( $str =~ $re ) {
-                    $include = 1;
-                    last;
-                }
-            }
-        }
-
-        $self->add_strings( $filename, $el, $str ) if $include;
+        print '--------' . "\n";
+        print "$str\n";
     }
 
     if ( $el->isa('PPI::Node') ) {
         foreach my $child ( @{$el->{children}} ) {
-            $self->watch_for_strings( $filename, $child, $opts );
+            $self->watch_for_statements( $filename, $child, $opts );
         }
     }
 
