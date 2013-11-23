@@ -8,7 +8,7 @@ use Carp qw< confess >;
 
 use Getopt::Long;
 
-use File::Slurp qw( read_file );
+use File::Next ();
 use PPI::Document ();
 use PPI::Document::File ();
 
@@ -26,10 +26,11 @@ sub main {
         'minlen=i'   => \$opts->{minlen},
     ) or exit 1;
 
-    @ARGV = ( '/Users/andy/bin/ack1', '/Users/andy/bin/ack2' );
+    my $iter = build_file_iterator( @ARGV );
 
     my $pcpd = App::PCPD->new;
-    for my $filename ( @ARGV ) {
+    while ( my $filename = $iter->() ) {
+        print "$filename\n";
         my $doc = PPI::Document->new( $filename );
         #my $dumper = PPI::Dumper->new( $doc, whitespace => 0, locations => 0 );
         $pcpd->watch_for_strings( $filename, $doc, $opts );
@@ -38,6 +39,23 @@ sub main {
     $pcpd->print_results( $opts );
 
     return 0;
+}
+
+
+sub build_file_iterator {
+    my @starts = @_;
+
+    my @non_descend = qw( CVS .svn .git blib );
+    my %non_descend = map { ( $_ => 1 ) } @non_descend;
+    my $descend_filter = sub { !$non_descend{$_} };
+    my $file_filter    = sub { /\.(pl|pm)$/ };
+    my $iter = File::Next::files( {
+            descend_filter  => $descend_filter,
+            file_filter     => $file_filter,
+            follow_symlinks => 0,
+        }, @starts );
+
+    return $iter;
 }
 
 
