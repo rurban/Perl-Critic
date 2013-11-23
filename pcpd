@@ -1,49 +1,45 @@
 #!/opt/local/bin/perl
 
-## There's too much use of source code in strings.
-## no critic (RequireInterpolationOfMetachars)
-
 use 5.006001;
 use strict;
 use warnings;
 
 use Carp qw< confess >;
 
+use Getopt::Long;
+
 use File::Slurp qw( read_file );
 use PPI::Document ();
 use PPI::Document::File ();
-#use PPI::Dumper ();
-#use Perl::Critic::Document ();
 
-#-----------------------------------------------------------------------------
-
-our $VERSION = '1.121';
-
-#-----------------------------------------------------------------------------
-
-@ARGV = ( '/Users/andy/bin/ack1', '/Users/andy/bin/ack2' );
 exit main();
 
 sub main {
+    my $opts = {
+        minfiles => 1,
+        minfound => 2,
+        minlen   => 1,
+    };
+    GetOptions(
+        'minfiles=i' => \$opts->{minfiles},
+        'minfound=i' => \$opts->{minfound},
+        'minlen=i'   => \$opts->{minlen},
+    ) or exit 1;
+
+    @ARGV = ( '/Users/andy/bin/ack1', '/Users/andy/bin/ack2' );
+
     my $pcpd = App::PCPD->new;
     for my $filename ( @ARGV ) {
         my $doc = PPI::Document->new( $filename );
         #my $dumper = PPI::Dumper->new( $doc, whitespace => 0, locations => 0 );
-        $pcpd->watch_for_strings( $filename, $doc );
+        $pcpd->watch_for_strings( $filename, $doc, $opts );
     }
 
-    $pcpd->print_dupes();
+    $pcpd->print_results( $opts );
 
     return 0;
 }
 
-my $single_quoted_str = 'Quoted string';
-sub some_func {
-    my $double_quoted_str = "Quoted string";
-    my $heredoc = <<'HERE';
-    String in a heredoc
-HERE
-}
 
 package App::PCPD;
 
@@ -63,13 +59,11 @@ sub add_strings {
     my $element  = shift;
     my @strings  = shift;
 
-    my @trimmed = @strings;
-    for ( @trimmed ) {
-        s/^\s+//;
-        s/\s+$//;
-    }
-    for my $string ( @trimmed ) {
-        my $strobj = ($self->{strings}->{$string} //= App::PCPD::String->new( $string ));
+    for my $string ( @strings ) {
+        $string =~ s/^\s+//;
+        $string =~ s/\s+$//;
+
+        my $strobj = ($self->{strings}->{$string} ||= App::PCPD::String->new( $string ));
         $strobj->add_instance( $filename, $element->line_number );
     }
 }
@@ -79,30 +73,48 @@ sub watch_for_strings {
     my $self     = shift;
     my $filename = shift;
     my $el       = shift;
+    my $opts     = shift;
 
+    my $str;
     if ( $el->isa( 'PPI::Token::Quote' ) ) {
-        $self->add_strings( $filename, $el, $el->string );
+        $str = $el->string;
     }
-    elsif ( $el->isa( 'PPI::Token::HereDoc' ) ) {
-        $self->add_strings( $filename, $el, $el->heredoc );
+    #elsif ( $el->isa( 'PPI::Token::HereDoc' ) ) {
+    #    $str = $el->heredoc;
+    #}
+
+    if ( $str && (length($str) >= $opts->{minlen}) ) {
+        $self->add_strings( $filename, $el, $str );
     }
 
     if ( $el->isa('PPI::Node') ) {
         foreach my $child ( @{$el->{children}} ) {
-            $self->watch_for_strings( $filename, $child );
+            $self->watch_for_strings( $filename, $child, $opts );
         }
     }
 
     return;
 }
 
-sub print_dupes {
+sub print_results {
     my $self = shift;
+    my $opts = shift;
 
-    for my $str ( keys %{$self->{strings}} ) {
-        my $instances = $self->{strings}->{$str};
-        if ( $instances->{n} > 5 ) {
-            {use Data::Dumper; local $Data::Dumper::Sortkeys=1; warn Dumper( $str => $instances )}
+    for my $str ( sort keys %{$self->{strings}} ) {
+        my $strobj = $self->{strings}->{$str};
+
+        my $show = 1;
+        $show &&= !$opts->{minfound} || ($strobj->nfound >= $opts->{minfound});
+        $show &&= !$opts->{minfiles} || ($strobj->nfiles >= $opts->{minfiles});
+
+        if ( $show ) {
+            print "$str\n";
+            my $instances = $strobj->instances;
+            for my $file ( sort keys %{$instances} ) {
+                my $n = +@{$instances->{$file}};
+                printf( "%5d %s\n", $n, $file );
+            }
+            print "\n";
         }
     }
 
@@ -117,9 +129,9 @@ sub new {
     my $str   = shift;
 
     my $self = bless {
-        str   => $str,
-        n     => 0,
-        files => {},
+        str       => $str,
+        nfound    => 0,
+        instances => {},
     }, $class;
 
     return $self;
@@ -130,10 +142,28 @@ sub add_instance {
     my $filename = shift;
     my $lineno   = shift;
 
-    ++$self->{n};
-    push( @{$self->{files}->{$filename}}, $lineno );
+    ++$self->{nfound};
+    push( @{$self->{instances}->{$filename}}, $lineno );
 
     return;
+}
+
+sub nfound {
+    my $self = shift;
+
+    return $self->{nfound};
+}
+
+sub nfiles {
+    my $self = shift;
+
+    return scalar keys %{$self->{instances}};
+}
+
+sub instances {
+    my $self = shift;
+
+    return $self->{instances};
 }
 
 1;
