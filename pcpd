@@ -57,7 +57,9 @@ sub main {
         }
     }
 
-    $pcpd->print_results( $opts );
+    if ( $pcpd->opts->{strings} ) {
+        $pcpd->print_strings_results( $opts );
+    }
 
     return 0;
 }
@@ -182,7 +184,37 @@ sub watch_for_strings {
     return;
 }
 
-sub print_results {
+sub watch_for_code {
+    my $self     = shift;
+    my $filename = shift;
+    my $el       = shift;
+
+    if ( $el->isa( 'PPI::Statement' ) && !$el->isa( 'PPI::Statement::Expression' ) ) {
+        $self->add_code( $filename, $el );
+    }
+
+    if ( $el->isa('PPI::Node') ) {
+        foreach my $child ( @{$el->{children}} ) {
+            $self->watch_for_code( $filename, $child );
+        }
+    }
+
+    return;
+}
+
+sub add_code {
+    my $self     = shift;
+    my $filename = shift;
+    my $element  = shift;
+
+    my $code = $element->content;
+
+    my $codeobj = ($self->{code}->{$code} ||= App::PCPD::Code->new( $code ));
+    $codeobj->add_instance( $filename, $element->line_number );
+}
+
+
+sub print_strings_results {
     my $self = shift;
 
     for my $str ( $self->ordered_strings ) {
@@ -226,6 +258,50 @@ sub new {
 
     my $self = bless {
         str       => $str,
+        nfound    => 0,
+        instances => {},
+    }, $class;
+
+    return $self;
+}
+
+sub add_instance {
+    my $self     = shift;
+    my $filename = shift;
+    my $lineno   = shift;
+
+    ++$self->{nfound};
+    push( @{$self->{instances}->{$filename}}, $lineno );
+
+    return;
+}
+
+sub nfound {
+    my $self = shift;
+
+    return $self->{nfound};
+}
+
+sub nfiles {
+    my $self = shift;
+
+    return scalar keys %{$self->{instances}};
+}
+
+sub instances {
+    my $self = shift;
+
+    return $self->{instances};
+}
+
+package App::PCPD::Code;
+
+sub new {
+    my $class = shift;
+    my $code  = shift;
+
+    my $self = bless {
+        code      => $code,
         nfound    => 0,
         instances => {},
     }, $class;
