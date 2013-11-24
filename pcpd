@@ -11,6 +11,7 @@ use Getopt::Long;
 use File::Next ();
 use PPI::Document ();
 use PPI::Document::File ();
+use PPI::Dumper ();
 
 exit main();
 
@@ -23,6 +24,8 @@ sub main {
         include_re => [],
     };
     GetOptions(
+        's|strings'    => \$opts->{strings},
+        'c|code'       => \$opts->{code},
         'minfiles=i'   => \$opts->{minfiles},
         'minfound=i'   => \$opts->{minfound},
         'minlen=i'     => \$opts->{minlen},
@@ -30,18 +33,28 @@ sub main {
         'include_re=s' => $opts->{include_re},
     ) or exit 1;
 
+    die 'Must specify at least --code or --strings' unless $opts->{code} || $opts->{strings};
+
     for ( @{$opts->{exclude_re}}, @{$opts->{include_re}} ) {
         $_ = qr/$_/;
     }
 
-    my $iter = build_file_iterator( @ARGV );
+    my @files = build_file_list( @ARGV );
 
-    my $pcpd = App::PCPD->new;
-    while ( my $filename = $iter->() ) {
+    warn scalar @files, " files to scan\n";
+
+    my $pcpd = App::PCPD->new( $opts );
+    for my $filename ( @files ) {
         print "$filename\n";
         my $doc = PPI::Document->new( $filename );
         #my $dumper = PPI::Dumper->new( $doc, whitespace => 0, locations => 0 );
-        $pcpd->watch_for_strings( $filename, $doc, $opts );
+        #$dumper->print;
+        if ( $pcpd->opts->{strings} ) {
+            $pcpd->watch_for_strings( $filename, $doc );
+        }
+        if ( $pcpd->opts->{code} ) {
+            $pcpd->watch_for_code( $filename, $doc );
+        }
     }
 
     $pcpd->print_results( $opts );
@@ -50,20 +63,34 @@ sub main {
 }
 
 
-sub build_file_iterator {
+sub build_file_list {
     my @starts = @_;
 
-    my @non_descend = qw( CVS .svn .git blib );
-    my %non_descend = map { ( $_ => 1 ) } @non_descend;
-    my $descend_filter = sub { !$non_descend{$_} };
-    my $file_filter    = sub { /\.(pl|pm)$/ };
-    my $iter = File::Next::files( {
-            descend_filter  => $descend_filter,
-            file_filter     => $file_filter,
-            follow_symlinks => 0,
-        }, @starts );
+    my %files;
 
-    return $iter;
+    for my $start ( @starts ) {
+        if ( -d $start ) {
+            my @non_descend = qw( CVS .svn .git blib );
+            my %non_descend = map { ( $_ => 1 ) } @non_descend;
+            my $descend_filter = sub { !$non_descend{$_} };
+            my $file_filter    = sub { /\.(pl|pm)$/ };
+            my $iter = File::Next::files( {
+                    descend_filter  => $descend_filter,
+                    file_filter     => $file_filter,
+                    follow_symlinks => 0,
+                }, $start );
+            while ( my $file = $iter->() ) {
+                ++$files{$file};
+            }
+        }
+        else {
+            ++$files{$start};
+        }
+    }
+
+    my @files = sort keys %files;
+
+    return @files;
 }
 
 
@@ -71,12 +98,21 @@ package App::PCPD;
 
 sub new {
     my $class = shift;
+    my $opts  = shift;
 
     my $self = bless {
+        opts    => $opts,
         strings => {},
+        code    => {},
     }, $class;
 
     return $self;
+}
+
+sub opts {
+    my $self = shift;
+
+    return $self->{opts};
 }
 
 sub add_strings {
@@ -99,7 +135,6 @@ sub watch_for_strings {
     my $self     = shift;
     my $filename = shift;
     my $el       = shift;
-    my $opts     = shift;
 
     my $str;
     if ( $el->isa( 'PPI::Token::Quote' ) ) {
@@ -115,9 +150,9 @@ sub watch_for_strings {
     #    $str = $el->heredoc;
     #}
 
-    if ( defined($str) && (length($str) >= $opts->{minlen}) ) {
+    if ( defined($str) && (length($str) >= $self->opts->{minlen}) ) {
         my $ignore = 0;
-        for my $re ( @{$opts->{exclude_re}} ) {
+        for my $re ( @{$self->opts->{exclude_re}} ) {
             if ( $str =~ $re ) {
                 $ignore = 1;
                 last;
@@ -125,9 +160,9 @@ sub watch_for_strings {
         }
 
         my $include = !$ignore;
-        if ( $include && @{$opts->{include_re}} ) {
+        if ( $include && @{$self->opts->{include_re}} ) {
             $include = 0;
-            for my $re ( @{$opts->{include_re}} ) {
+            for my $re ( @{$self->opts->{include_re}} ) {
                 if ( $str =~ $re ) {
                     $include = 1;
                     last;
@@ -140,7 +175,7 @@ sub watch_for_strings {
 
     if ( $el->isa('PPI::Node') ) {
         foreach my $child ( @{$el->{children}} ) {
-            $self->watch_for_strings( $filename, $child, $opts );
+            $self->watch_for_strings( $filename, $child );
         }
     }
 
@@ -149,14 +184,13 @@ sub watch_for_strings {
 
 sub print_results {
     my $self = shift;
-    my $opts = shift;
 
     for my $str ( $self->ordered_strings ) {
         my $strobj = $self->{strings}->{$str};
 
         my $show = 1;
-        $show &&= !$opts->{minfound} || ($strobj->nfound >= $opts->{minfound});
-        $show &&= !$opts->{minfiles} || ($strobj->nfiles >= $opts->{minfiles});
+        $show &&= !$self->opts->{minfound} || ($strobj->nfound >= $self->opts->{minfound});
+        $show &&= !$self->opts->{minfiles} || ($strobj->nfiles >= $self->opts->{minfiles});
 
         if ( $show ) {
             print "$str\n";
