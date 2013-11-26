@@ -60,6 +60,11 @@ sub main {
     if ( $pcpd->opts->{strings} ) {
         $pcpd->print_strings_results( $opts );
     }
+    if ( $pcpd->opts->{code} ) {
+        {use Data::Dumper; local $Data::Dumper::Sortkeys=1; warn Dumper( $pcpd->{code})}
+        #$pcpd->print_code_results( $opts );
+    }
+
 
     return 0;
 }
@@ -184,20 +189,42 @@ sub watch_for_strings {
     return;
 }
 
+sub is_wanted_statement_type {
+    my $self = shift;
+    my $el   = shift;
+
+    return 0 unless $el->isa( 'PPI::Statement' );
+
+    my @unwanted_statement_types = qw(
+        PPI::Statement::Expression
+        PPI::Statement::Sub
+        PPI::Statement::Package
+    );
+
+    for my $type ( @unwanted_statement_types ) {
+        return 0 if $el->isa( $type );
+    }
+
+    return 1;
+}
+
 sub watch_for_code {
     my $self     = shift;
     my $filename = shift;
     my $el       = shift;
 
-    if ( $el->isa( 'PPI::Statement' ) && !$el->isa( 'PPI::Statement::Expression' ) ) {
-        $self->add_code( $filename, $el );
+    if ( $self->is_wanted_statement_type( $el ) ) {
+        my $dumper = PPI::Dumper->new( $el, whitespace => 0, locations => 0 );
+        $dumper->print;
+        print "--------------\n";
+        print $el->content, "\n";
+        print "=-===============\n";
+        #$self->add_code( $filename, $el );
     }
 
-    if ( $el->isa('PPI::Node') ) {
         foreach my $child ( @{$el->{children}} ) {
             $self->watch_for_code( $filename, $child );
         }
-    }
 
     return;
 }
